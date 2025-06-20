@@ -165,7 +165,7 @@ if __name__ == "__main__":
 | `save_five_point_vector(filename=None)`                  | 批量保存所有相机五点向量              | `filename`: 文件名（可选）      | 无                 |
 | `draw_pose_vector(size=0.2)`                             | 绘制所有相机姿态三维箭头图             | `size`: 向量缩放因子           | 无                 |
 | `save_pointcloud_3d(save_path)`                          | 导出三维点云为 SHP 或 MAT         | `save_path`: 文件名（后缀自动判别） | 无                 |
-| `get_img_to_pointcloud_corresponding_for_arcgis(num)`    | 导出 ArcGIS 影像点到点云对应 txt 文件 | `num`: 影像编号              | 无                 |
+| `get_img_to_pointcloud_corresponding_for_arcgis(num)`    | 导出同名点像素坐标与对应的点云XY坐标生成配准txt文件（用于ArcGIS影像配准到DEM）| `num`: 影像编号              | 无                 |
 | `get_img_to_pointcloud_corresponding(num)`               | 获取某影像2D像素与3D点的全部配对        | `num`: 影像编号              | 3D点数组, 2D点数组      |
 | `get_img_to_pointcloud_corresponding_couple(num1, num2)` | 获取两影像同名点与三维点配对            | `num1`, `num2`: 两影像编号    | 2D点1, 2D点2, 3D点数组 |
 | `get_cam_parameter_matrix(keyword)`                      | 按影像名关键字查找内外参矩阵            | `keyword`: 字符串关键字        | 内参, 外参, 编号        |
