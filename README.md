@@ -1,10 +1,10 @@
-
-
 # Photoscan Aerial Triangulation XML Parser
 
-**Photoscan 空中三角测量 XML 文件解析与数据导出工具包**
+**Photoscan 空三角测量 XML 文件解析与数据导出工具包**
 
-本项目旨提供一套**高效、开源的 Photoscan 空三角测量 XML 结果解析工具**，支持批量读取、数据导出、相机参数提取、三维点云处理、配准文件生成和多种可视化分析，极大提升后处理自动化效率。
+本项目旨在为无人机航空摄影测量、三维重建等场景提供一套**高效、开源的 Photoscan 空三角测量 XML 结果解析工具**，支持批量读取、数据导出、相机参数提取、三维点云处理、配准文件生成和多种可视化分析，极大提升后处理自动化效率。
+
+项目主页：[https://github.com/boywc/Analysis\_Photoscan\_XML\_tools](https://github.com/boywc/Analysis_Photoscan_XML_tools)
 
 ---
 
@@ -32,11 +32,11 @@ pip install numpy matplotlib scipy pyshp opencv-python
 
 ## 安装本项目
 
-你可以直接 clone 本项目源码：
+你可以通过 Git 克隆获取源码：
 
 ```bash
-git clone https://github.com/your_github_name/photoscan-xml-parser.git
-cd photoscan-xml-parser
+git clone https://github.com/boywc/Analysis_Photoscan_XML_tools.git
+cd Analysis_Photoscan_XML_tools
 pip install -e .
 ```
 
@@ -150,8 +150,24 @@ cor_3D, cor_2D = obj_xml.get_img_to_pointcloud_corresponding(num)
 * 欢迎提交 issue、pull request 或通过邮件联系作者
 * 如果你希望补充其他 XML 格式、支持新输出格式，欢迎参与开发！
 
+---
 
+## 许可协议
 
+本项目基于 [MIT License](LICENSE) 开源。
+请自由使用、修改和分发。
 
+---
 
+## 联系作者
 
+* GitHub: [boywc](https://github.com/boywc)
+* 邮箱: [liurenruis@gmail.com](mailto:liurenruis@gmail.com)
+* 项目主页: [https://github.com/boywc/Analysis\_Photoscan\_XML\_tools](https://github.com/boywc/Analysis_Photoscan_XML_tools)
+* Git 克隆地址: `https://github.com/boywc/Analysis_Photoscan_XML_tools.git`
+
+---
+
+**欢迎 Star、Fork 与使用本项目！如有问题或建议，欢迎通过 GitHub Issue 或邮件联系作者。**
+
+---
