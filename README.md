@@ -8,6 +8,31 @@
 
 ---
 
+## 数据与目录结构说明
+
+示例数据以祝融号255站点为例，项目目录结构如下：
+
+```
+项目根目录
+│
+├─ main.py                    # Demo主程序（功能演示）
+├─ PhotoscanXMLAnalyse.py     # 主功能库文件
+├─ README.md                  # 项目说明文档
+│
+├─ testdata/                  # 测试数据目录
+│   ├─ 255/                   # 存储255号站点原始影像（可选）
+│   ├─ 255.xml                # Photoscan基于影像与位置信息导出的空三角测量XML
+│   ├─ information_2CL.csv    # 影像与位置信息的对应表
+```
+
+**说明**：
+
+* `testdata/255/` 为影像文件夹，存放255站点拍摄的原始影像（如有需要可自行添加影像）。
+* `testdata/information_2CL.csv` 为影像信息（如像控点、外参等辅助数据）。
+* `testdata/255.xml` 是基于上述影像与位置信息，用Photoscan导出的空三角XML文件，本工具包所有解析、导出操作均基于该文件展开。
+
+---
+
 ## 特性与功能
 
 * 自动解析 Photoscan 导出的空三角测量 XML 文件
@@ -40,74 +65,93 @@ cd Analysis_Photoscan_XML_tools
 pip install -e .
 ```
 
-> 或将 `photoscan_xml_parser.py` 直接拷贝到你的项目中也可使用。
+> 或将 `PhotoscanXMLAnalyse.py` 直接拷贝到你的项目中也可使用。
 
 ---
 
-## 快速上手
+## 数据准备与快速上手
 
-### 1. 创建类对象，读取 XML 文件
+### 1. 数据准备
 
-```python
-from photoscan_xml_parser import ana_photoscan_xml
+请确保 `testdata` 目录下存在如下文件：
 
-# 读取 Photoscan XML 文件
-obj_xml = ana_photoscan_xml("CE6PS.xml")
-```
+* `255.xml`：Photoscan导出的空三角测量XML（主解析对象）
+* `information_2CL.csv`：影像对应的位置信息（如像控点或航位推算结果）
+* 可选：`255/` 文件夹存放原始影像文件
 
-### 2. 保存相机位姿信息
+### 2. 演示样例 main.py（推荐从此脚本入门）
 
-```python
-# 保存为默认文件名 xml_information.csv
-obj_xml.save_xml_pose()
-# 或自定义文件名
-obj_xml.save_xml_pose("camera_poses.csv")
-```
+`main.py` 脚本提供了从XML读取、解析到各类导出的完整操作演示，涵盖如下常见任务：
 
-### 3. 获取一幅相机的五点向量
+* XML文件读取与解析
+* 相机位姿（外参）导出
+* 相机五点射线与全部像素射线方向获取与保存
+* 三维点云数据导出（SHP/MAT格式）
+* 影像-点云配准对应关系（2D/3D）导出
+* 畸变参数获取
+* 关键参数查找与可视化
 
-```python
-# num: 影像编号（整数，从0开始）
-img_name, rays_o, rays_d = obj_xml.get_rays_np_around_five_point(num=3)
-print(img_name, rays_o, rays_d)
-```
-
-### 4. 保存所有相机的五点向量
+#### 推荐调用流程如下：
 
 ```python
-obj_xml.save_five_point_vector("five_point_vector.csv")
+from PhotoscanXMLAnalyse import ana_photoscan_xml
+
+def main():
+    # 1. 加载XML并解析
+    obj_xml = ana_photoscan_xml("testdata/255.xml")
+
+    # 2. 导出全部相机位姿为CSV
+    obj_xml.save_xml_pose("testdata/xml_information.csv")
+
+    # 3. 获取第一个相机的五点投影射线（四角+中心）
+    img_name, rays_o, rays_d = obj_xml.get_rays_np_around_five_point(0)
+    print(f"[五点射线] 相机: {img_name}\n 原点: {rays_o}\n 方向: {rays_d}")
+
+    # 4. 批量保存所有相机的五点向量
+    obj_xml.save_five_point_vector("testdata/five_point_vector.csv")
+
+    # 5. 绘制所有相机的三维姿态箭头
+    obj_xml.draw_pose_vector(size=1.0)
+
+    # 6. （可选）获取并可视化全部像素点的投影方向
+    img_name, rays_o, rays_d_full = obj_xml.get_rays_np_all_pixel_directiont(0, show_key=True)
+
+    # 7. 保存三维点云为SHP/MAT格式
+    obj_xml.save_pointcloud_3d("testdata/pointcloud3d.shp")
+    obj_xml.save_pointcloud_3d("testdata/pointcloud3d.mat")
+
+    # 8. 导出ArcGIS影像-点云配准TXT
+    obj_xml.get_img_to_pointcloud_corresponding_for_arcgis(0)
+    print(f"ArcGIS影像-点云配准TXT已输出到: {img_name}.txt")
+
+    # 9. 查询影像与点云的2D/3D同名点
+    cor_3D, cor_2D = obj_xml.get_img_to_pointcloud_corresponding(0)
+    print(f"[同名点3D] 形状: {cor_3D.shape}, [同名点2D] 形状: {cor_2D.shape}")
+
+    # 10. 获取两幅影像的同名点与三维点
+    if len(obj_xml.camera_pose) > 1:
+        img1_points, img2_points, cloud_points = obj_xml.get_img_to_pointcloud_corresponding_couple(0, 1)
+        print(f"[两幅影像同名点] 影像1点数: {len(img1_points)}, 影像2点数: {len(img2_points)}, 三维点数: {len(cloud_points)}")
+
+    # 11. 查找相机内参/外参（通过影像名关键字）
+    result = obj_xml.get_cam_parameter_matrix(".jpg")
+    if result is not None:
+        K, pose, idx = result
+        print("[查找相机参数] 索引:", idx)
+        print("K (内参矩阵):\n", K)
+        print("Pose (外参矩阵):\n", pose)
+    else:
+        print("未找到包含关键字 .jpg 的影像")
+
+    # 12. 获取畸变参数
+    distortion_dict = obj_xml.get_Distortion()
+    print("[畸变参数]", distortion_dict)
+
+if __name__ == "__main__":
+    main()
 ```
 
-### 5. 绘制三维相机向量
-
-```python
-obj_xml.draw_pose_vector()
-```
-
-### 6. 保存三维点云
-
-```python
-# 导出为 SHP
-obj_xml.save_pointcloud_3d("cloud.shp")
-# 导出为 MAT
-obj_xml.save_pointcloud_3d("cloud.mat")
-```
-
-### 7. 生成 ArcGIS 影像到点云对应点文件
-
-```python
-# num: 影像编号
-obj_xml.get_img_to_pointcloud_corresponding_for_arcgis(num=3)
-# 自动生成 txt，字段为：图像x 图像y 点云x 点云y
-```
-
-### 8. 查询影像与点云的2D/3D同名点坐标
-
-```python
-cor_3D, cor_2D = obj_xml.get_img_to_pointcloud_corresponding(num=3)
-# cor_3D: Nx3三维点
-# cor_2D: Nx2像素坐标
-```
+> 运行`main.py`，所有功能结果将在`testdata/`目录输出或命令行直接打印。
 
 ---
 
