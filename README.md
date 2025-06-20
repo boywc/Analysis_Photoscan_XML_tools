@@ -2,7 +2,7 @@
 
 **Photoscan 空中三角测量 XML 文件解析与数据导出工具包**
 
-本项目为论文 [**"High-Resolution and Spatial-Continuous 3-D Model Reconstruction of Martian Surface by Integrating Multisensor Data of Zhurong Rover "**](https://ieeexplore.ieee.org/abstract/document/10536102)（见IEEE Xplore）所配套的开源代码。旨在为三维重建与火星巡视器数据处理等场景提供一套**高效、开源的 Photoscan 空三角测量 XML 结果解析工具**，支持批量读取、数据导出、相机参数提取、三维点云处理、配准文件生成和多种可视化分析，极大提升后处理自动化效率。
+本项目为论文 [**"High-Resolution and Spatial-Continuous 3-D Model Reconstruction of Martian Surface by Integrating Multisensor Data of Zhurong Rover "**](https://ieeexplore.ieee.org/abstract/document/10536102)（见IEEE Xplore）所配套的开源代码。旨在为三维重建与火星巡视器数据处理等场景提供一套**高效、开源的 Photoscan 空中三角测量 XML 结果解析工具**，支持批量读取、数据导出、相机参数提取、三维点云处理、配准文件生成和多种可视化分析，极大提升后处理自动化效率。
 
 项目主页：[https://github.com/boywc/Analysis\_Photoscan\_XML\_tools](https://github.com/boywc/Analysis_Photoscan_XML_tools)
 
