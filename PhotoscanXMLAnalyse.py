@@ -453,3 +453,31 @@ class ana_photoscan_xml(object):
             pere[key] = val
         return pere
 
+    def check_cloud_range(self):
+        """
+        获取点云的空间范围（XYZ轴的最小值与最大值）。
+
+        Returns:
+            tuple: (min_x, max_x, min_y, max_y, min_z, max_z)
+                - min_x, max_x: 点云X轴最小、最大值
+                - min_y, max_y: 点云Y轴最小、最大值
+                - min_z, max_z: 点云Z轴最小、最大值
+        """
+        object_point = np.array(self.pointcloud_3D)
+        return (np.min(object_point[:, 0]), np.max(object_point[:, 0]),
+                np.min(object_point[:, 1]), np.max(object_point[:, 1]),
+                np.min(object_point[:, 2]), np.max(object_point[:, 2]))
+
+    def get_elevation(self, points):
+        """
+        获取指定平面点（x, y）在点云中的高程（Z值）。
+
+        Args:
+            points (ndarray): 输入二维点坐标数组，shape=[n, 2]，每行[x, y]
+
+        Returns:
+            ndarray: 对应输入点的高程（Z）数组，shape=[n,]
+        """
+        object_point = np.array(self.pointcloud_3D)
+        sampling = griddata(object_point[:, :2], object_point[:, 2], points, method='linear')
+        return sampling
