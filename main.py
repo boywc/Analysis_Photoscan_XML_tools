@@ -37,7 +37,7 @@ def main():
     obj_xml.save_five_point_vector("testdata/five_point_vector.csv")
 
     # ========== 5. 绘制所有相机三维指向箭头图（3D） ==========
-    obj_xml.draw_pose_vector(size=1.0)
+    obj_xml.draw_pose_vector(size=0.1)
 
     # ========== 6. 获取并可视化全部像素点的投影方向（可选） ==========
     # 若数据量大建议 show_key=False
@@ -74,6 +74,22 @@ def main():
     # ========== 12. 获取畸变参数 ==========
     distortion_dict = obj_xml.get_Distortion()
     print("[畸变参数]", distortion_dict)
+
+    # ========== 13. 查询三维点云的空间范围（XYZ轴最大最小值） ==========
+    min_x, max_x, min_y, max_y, min_z, max_z = obj_xml.check_cloud_range()
+    print(f"[点云空间范围] X: {min_x:.3f} ~ {max_x:.3f}，Y: {min_y:.3f} ~ {max_y:.3f}，Z: {min_z:.3f} ~ {max_z:.3f}")
+
+    # ========== 14. 获取指定点的高程值（点云插值） ==========
+    # 构造一组XY平面上的采样点，示例取点云X/Y范围中部
+    test_points = np.array([
+        [(min_x + max_x) / 2, (min_y + max_y) / 2],  # 中心点
+        [min_x, min_y],  # 左下角
+        [max_x, max_y],  # 右上角
+    ])
+    elevations = obj_xml.get_elevation(test_points)
+    for i, (xy, z) in enumerate(zip(test_points, elevations)):
+        print(f"[插值高程] 第{i + 1}个点 (x={xy[0]:.3f}, y={xy[1]:.3f}) -> z={z:.3f}")
+
 
 if __name__ == "__main__":
     main()
