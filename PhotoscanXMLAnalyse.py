@@ -6,49 +6,76 @@ from scipy.interpolate import griddata
 import shapefile
 import random
 from scipy.io import savemat
+
+
 # from Analyse3DTools import opencv_PNP, preprocess, draw_Match
 
-
 def get_str(cxx):
-    cxxStart = int(cxx.find(">"))+1
+    """
+    从XML格式字符串提取中间的文本内容。
+
+    Args:
+        cxx (str): XML格式字符串，如"<Tag>value</Tag>"。
+    Returns:
+        str: 标签内的字符串值。
+    """
+    cxxStart = int(cxx.find(">")) + 1
     cxxEnd = int(cxx.find("</"))
     cxx_r = cxx[cxxStart:cxxEnd]
     return cxx_r
 
 
 def get_float(cxx):
-    cxxStart = int(cxx.find(">"))+1
+    """
+    从XML格式字符串提取标签内的数值并转为float。
+
+    Args:
+        cxx (str): XML格式字符串。
+    Returns:
+        float: 标签内的浮点数值。
+    """
+    cxxStart = int(cxx.find(">")) + 1
     cxxEnd = int(cxx.find("</"))
     cxx_r = float(cxx[cxxStart:cxxEnd])
     return cxx_r
 
 
 class ana_photoscan_xml(object):
+    """
+    Photoscan空三角测量XML文件分析主类。
+
+    支持批量提取相机参数、点云、配准关系导出、可视化等多种常用操作。
+    """
 
     def __init__(self, xml_name):
-        self.xml_name = xml_name
-        f = open(xml_name, 'rb') # 读取文件
-        fpList = f.readlines()  # 内容生成列表
+        """
+        构造函数，解析并读取XML文件核心参数。
 
+        Args:
+            xml_name (str): Photoscan导出的空三角XML文件路径。
+        """
+        self.xml_name = xml_name
+        f = open(xml_name, 'rb')
+        fpList = f.readlines()  # 文件内容按行读入
         print("Open xml file: ", xml_name)
-        self.camera_pose = []
-        self.pointcloud_3D = []
+        self.camera_pose = []  # 存储所有相机姿态及参数
+        self.pointcloud_3D = []  # 存储所有三维点云（TiePoints）
         print("Read xml file")
         for row, inf in enumerate(fpList):
             inf = str(inf)
+            # 提取相机内参：像元、主点、焦距
             if inf.find('<ImageDimensions>') != -1:
                 wwww = get_float(str(fpList[row + 1]))
                 hhhh = get_float(str(fpList[row + 2]))
                 ffff = get_float(str(fpList[row + 6]))
                 self.hwf = [hhhh, wwww, ffff]
-
+            # 提取主点坐标
             if inf.find('<PrincipalPoint>') != -1:
                 self.w05 = get_float(str(fpList[row + 1]))
                 self.h05 = get_float(str(fpList[row + 2]))
-
+            # 提取相机姿态与位置信息
             if inf.find('<ImagePath>') != -1:
                 id = int(get_float(str(fpList[row - 1])))
-
                 save_data_list = []
                 image_name = str(fpList[row])
                 image_name = get_str(image_name).split("/")[-1]
@@ -58,8 +85,8 @@ class ana_photoscan_xml(object):
                     save_data_list.append(in_data)
                 self.camera_pose.append(save_data_list)
                 no_list = len(self.camera_pose)
-                print("Image id: ", id, "   List_No: ", no_list-1)
-
+                print("Image id: ", id, "   List_No: ", no_list - 1)
+            # 提取三维点云（TiePoint）
             if inf.find('<TiePoint>') != -1:
                 save_data_list_pc = []
                 for add_ind in [2, 3, 4]:
@@ -72,29 +99,35 @@ class ana_photoscan_xml(object):
         self.__make_matrix()
 
     def save_xml_pose(self, path="xml_information.csv"):
+        """
+        保存所有相机的姿态（外参矩阵、相机中心）到CSV文件。
+
+        Args:
+            path (str): 输出CSV文件名，默认为"xml_information.csv"。
+        """
         csvF = open(path, 'w', newline="")
         csv_writer = csv.writer(csvF)
         csv_writer.writerow(["NAME",
-                             "M00","M01","M02",
-                             "M10","M11","M12",
-                             "M20","M21","M22",
+                             "M00", "M01", "M02",
+                             "M10", "M11", "M12",
+                             "M20", "M21", "M22",
                              "center_x", "center_y", "center_z"
-                            ])
+                             ])
         for save_data_list in self.camera_pose:
             csv_writer.writerow(save_data_list)
         csvF.close()
         print("Save xml file pose finish")
 
     def __make_matrix(self):
-
+        """
+        解析XML内参数并生成相机内参矩阵K与所有相机的外参矩阵pose_matrix。
+        """
         H, W, focal = self.hwf
-        HWF = [H, W, focal]
         self.K = np.array([
             [focal, 0, self.w05],
             [0, focal, self.h05],
             [0, 0, 1]
         ])
-
         self.pose_matrix = []
         for row in self.camera_pose:
             M = np.array(row[1:10])
@@ -105,36 +138,53 @@ class ana_photoscan_xml(object):
             self.pose_matrix.append(pose)
 
     def get_rays_np_around_five_point(self, num):
+        """
+        获取指定影像的五个关键像素点（四角+中心）的投影射线（向量）。
 
+        Args:
+            num (int): 相机索引（从0开始）。
+        Returns:
+            img_name (str): 影像名
+            rays_o (ndarray): 相机中心点
+            rays_d (ndarray): 投影方向向量（五个点）
+        """
         H, W, F = self.hwf
-        i = np.array([0, W, 0, W, W/2])
+        i = np.array([0, W, 0, W, W / 2])
         i.astype(np.float32)
-        j = np.array([0, 0, H, H, H/2])
+        j = np.array([0, 0, H, H, H / 2])
         j.astype(np.float32)
         K = self.K
         c2w = self.pose_matrix[num]
         img_name = self.camera_pose[num][0]
 
-        dirs = np.stack([(i-K[0][2])/K[0][0], (j-K[1][2])/K[1][1], np.ones_like(i)], -1)
-        c2w_r = c2w[:3,:3]
+        dirs = np.stack([(i - K[0][2]) / K[0][0], (j - K[1][2]) / K[1][1], np.ones_like(i)], -1)
+        c2w_r = c2w[:3, :3]
         rays_d = [dir.dot(c2w_r) for dir in dirs]
         rays_o = np.broadcast_to(c2w[:3, -1], np.shape(rays_d))
-
         return img_name, rays_o, rays_d
 
     def get_rays_np_all_pixel_directiont(self, num, show_key=False):
+        """
+        获取指定影像所有像素点的投影射线方向，并支持可视化RGB各分量。
 
+        Args:
+            num (int): 相机索引
+            show_key (bool): 是否显示射线方向三通道可视化
+        Returns:
+            img_name (str): 影像名
+            rays_o (ndarray): 相机中心
+            rays_d (ndarray): 每个像素射线方向(H,W,3)
+        """
         H, W, F = self.hwf
         h_list = np.arange(H)
         w_list = np.arange(W)
         w_mesh, h_mesh = np.meshgrid(w_list, h_list)
         x = np.reshape(w_mesh, (-1))
         y = np.reshape(h_mesh, (-1))
-
         K = self.K
         c2w = self.pose_matrix[num]
         img_name = self.camera_pose[num][0]
-        dirs = np.stack([(x-K[0][2])/K[0][0], (y-K[1][2])/K[1][1], np.ones_like(x)], -1)
+        dirs = np.stack([(x - K[0][2]) / K[0][0], (y - K[1][2]) / K[1][1], np.ones_like(x)], -1)
         c2w_r = c2w[:3, :3]
         rays_d = np.array([dir.dot(c2w_r) for dir in dirs])
         rays_o = c2w[:3, -1]
@@ -153,17 +203,22 @@ class ana_photoscan_xml(object):
         return img_name, rays_o, rays_d
 
     def save_five_point_vector(self, path='five_point_vector.csv'):
+        """
+        批量保存所有相机的五点射线参数到CSV。
+
+        Args:
+            path (str): 输出文件名，默认为"five_point_vector.csv"。
+        """
         csvF = open(path, 'w', newline="")
         csv_writer = csv.writer(csvF)
         csv_writer.writerow(["NAME",
-                             "base_x","base_y","base_z",
-                             "upleft_x","upleft_y","upleft_z",
-                             "upright_x","upright_y","upright_z",
-                             "dounleft_x","dounleft_y","dounleft_z",
+                             "base_x", "base_y", "base_z",
+                             "upleft_x", "upleft_y", "upleft_z",
+                             "upright_x", "upright_y", "upright_z",
+                             "dounleft_x", "dounleft_y", "dounleft_z",
                              "dounright_x", "dounright_y", "dounright_z",
                              "center_x", "center_y", "center_z"
-                            ])
-
+                             ])
         for inf in range(len(self.camera_pose)):
             img_name, rays_o, rays_d = self.get_rays_np_around_five_point(inf)
             save_row = [img_name]
@@ -176,29 +231,37 @@ class ana_photoscan_xml(object):
         print("Save five point vector finish")
 
     def draw_pose_vector(self, size=0.2):
+        """
+        绘制所有相机的五点投影射线三维分布（箭头可缩放）。
+
+        Args:
+            size (float): 向量箭头缩放因子，默认为0.2。
+        """
         draw_o_list = []
         draw_d_list = []
-
         for inf in range(len(self.camera_pose)):
             img_name, rays_o, rays_d = self.get_rays_np_around_five_point(inf)
             draw_o_list.append(rays_o)
             draw_d_list.append(rays_d)
         draw_o_list = np.vstack(draw_o_list)
         draw_d_list = np.vstack(draw_d_list)
-
         x = draw_o_list[:, 0]
         y = draw_o_list[:, 1]
         z = draw_o_list[:, 2]
-        u = draw_d_list[:, 0]*size
-        v = draw_d_list[:, 1]*size
-        w = draw_d_list[:, 2]*size
-
+        u = draw_d_list[:, 0] * size
+        v = draw_d_list[:, 1] * size
+        w = draw_d_list[:, 2] * size
         ax = plt.figure().add_subplot(projection='3d')
         ax.quiver(x, y, z, u, v, w, length=0.1, arrow_length_ratio=0.1)
-
         plt.show()
 
     def save_pointcloud_3d(self, save_path):
+        """
+        导出三维点云，支持SHP（矢量点）与MAT（Matlab）两种格式。
+
+        Args:
+            save_path (str): 文件路径，支持".shp"或".mat"后缀自动识别格式。
+        """
         savetype = save_path.split(".")[-1]
         if savetype == "shp":
             file = shapefile.Writer(save_path, shapeType=1, autoBalance=1)
@@ -210,7 +273,6 @@ class ana_photoscan_xml(object):
                 file.record(inf[0], inf[1], inf[2])
             file.close()
             print("Save Shp File Success")
-
         if savetype == "mat":
             save_d = {}
             save_ar = np.array(self.pointcloud_3D)
@@ -221,19 +283,22 @@ class ana_photoscan_xml(object):
             print("Save Mat File Success")
 
     def get_img_to_pointcloud_corresponding_for_arcgis(self, num):
+        """
+        生成单幅影像至点云的对应TXT文件，方便ArcGIS配准。
+
+        Args:
+            num (int): 相机索引
+        """
         img_name = self.camera_pose[num][0]
         find_key_word = "<PhotoId>%d</PhotoId>" % num
-
-        f = open(self.xml_name, 'r')  # 读取文件
-        fpList = f.readlines()  # 内容生成列表
-
+        f = open(self.xml_name, 'r')
+        fpList = f.readlines()
         corresponding_list = []
         for row, inf in enumerate(fpList):
             inf = str(inf)
             if inf.find('<TiePoint>') != -1:
                 x_point_cloud = get_float(str(fpList[row + 2]))
                 y_point_cloud = get_float(str(fpList[row + 3]))
-
                 start_tie_line = row
                 son_i = 0
                 while True:
@@ -242,24 +307,29 @@ class ana_photoscan_xml(object):
                         end_tie_line = start_tie_line + son_i
                         break
                     son_i += 1
-
                 for son_num, block_line in enumerate(fpList[start_tie_line:end_tie_line]):
                     if block_line.find(find_key_word) != -1:
                         x_img = get_float(str(fpList[row + son_num + 1]))
                         y_img = get_float(str(fpList[row + son_num + 2]))
-                        corresponding_list.append([x_img, -1*y_img, x_point_cloud, y_point_cloud])
+                        corresponding_list.append([x_img, -1 * y_img, x_point_cloud, y_point_cloud])
         corresponding_list = np.array(corresponding_list)
         savename_txt = img_name + ".txt"
         np.savetxt(savename_txt, corresponding_list)
         print("Save image to point cloud corresponding file success")
 
     def get_img_to_pointcloud_corresponding(self, num):
+        """
+        获取单幅影像所有2D-3D同名点对应关系。
+
+        Args:
+            num (int): 相机索引
+        Returns:
+            tuple: (3D点坐标数组, 2D像素点坐标数组)
+        """
         img_name = self.camera_pose[num][0]
         find_key_word = "<PhotoId>%d</PhotoId>" % num
-
-        f = open(self.xml_name, 'r')  # 读取文件
-        fpList = f.readlines()  # 内容生成列表
-
+        f = open(self.xml_name, 'r')
+        fpList = f.readlines()
         corresponding_list_3D = []
         corresponding_list_2D = []
         for row, inf in enumerate(fpList):
@@ -268,7 +338,6 @@ class ana_photoscan_xml(object):
                 x_point_cloud = get_float(str(fpList[row + 2]))
                 y_point_cloud = get_float(str(fpList[row + 3]))
                 z_point_cloud = get_float(str(fpList[row + 4]))
-
                 start_tie_line = row
                 son_i = 0
                 while True:
@@ -277,7 +346,6 @@ class ana_photoscan_xml(object):
                         end_tie_line = start_tie_line + son_i
                         break
                     son_i += 1
-
                 for son_num, block_line in enumerate(fpList[start_tie_line:end_tie_line]):
                     if block_line.find(find_key_word) != -1:
                         x_img = get_float(str(fpList[row + son_num + 1]))
@@ -288,16 +356,22 @@ class ana_photoscan_xml(object):
         corresponding_list_2D = np.array(corresponding_list_2D)
         return corresponding_list_3D, corresponding_list_2D
 
-
     def get_img_to_pointcloud_corresponding_couple(self, num1, num2):
+        """
+        获取两幅影像的同名点及其三维点的配对，便于双目匹配或PNP验证。
+
+        Args:
+            num1 (int): 第一幅影像索引
+            num2 (int): 第二幅影像索引
+        Returns:
+            tuple: (影像1像素点, 影像2像素点, 三维点)
+        """
         img_name_1 = self.camera_pose[num1][0]
         find_key_word_1 = "<PhotoId>%d</PhotoId>" % num1
         img_name_2 = self.camera_pose[num2][0]
         find_key_word_2 = "<PhotoId>%d</PhotoId>" % num2
-
-        f = open(self.xml_name, 'r')  # 读取文件
-        fpList = f.readlines()  # 内容生成列表
-
+        f = open(self.xml_name, 'r')
+        fpList = f.readlines()
         img1_list = []
         img2_list = []
         pointcloud_list = []
@@ -309,7 +383,6 @@ class ana_photoscan_xml(object):
                 z_point_cloud = get_float(str(fpList[row + 4]))
                 point_1_kg = False
                 point_2_kg = False
-
                 start_tie_line = row
                 son_i = 0
                 while True:
@@ -318,7 +391,6 @@ class ana_photoscan_xml(object):
                         end_tie_line = start_tie_line + son_i
                         break
                     son_i += 1
-
                 for son_num, block_line in enumerate(fpList[start_tie_line:end_tie_line]):
                     if block_line.find(find_key_word_1) != -1:
                         x_img_1 = get_float(str(fpList[row + son_num + 1]))
@@ -335,18 +407,30 @@ class ana_photoscan_xml(object):
         return img1_list, img2_list, pointcloud_list
 
     def get_cam_parameter_matrix(self, image_keyword):
+        """
+        按影像名关键字检索相机的内参矩阵、外参矩阵与索引编号。
+
+        Args:
+            image_keyword (str): 影像名的关键字（如文件名后缀）
+        Returns:
+            tuple: (内参矩阵K, 外参矩阵, 相机索引)
+        """
         for sy, img_list in enumerate(self.camera_pose):
             if image_keyword in img_list[0]:
                 this_pose = self.pose_matrix[sy]
                 return self.K, this_pose, sy
-
         print("Not find ", image_keyword)
         return None
 
     def get_Distortion(self):
-        f = open(self.xml_name, 'r')  # 读取文件
-        fpList = f.readlines()  # 内容生成列表
+        """
+        读取相机的畸变参数。
 
+        Returns:
+            dict: 相机畸变系数字典（如K1、K2、P1、P2、K3等）
+        """
+        f = open(self.xml_name, 'r')
+        fpList = f.readlines()
         corresponding_list = []
         for row, inf in enumerate(fpList):
             inf = str(inf)
@@ -360,80 +444,72 @@ class ana_photoscan_xml(object):
                         break
                     son_i += 1
                 break
-        pere_list = fpList[start_tie_line : end_tie_line]
+        pere_list = fpList[start_tie_line: end_tie_line]
         pere = {}
         for li in pere_list:
             first_index = li.find('<')
             second_index = li.find('>')
-            key = li[first_index+1:second_index]
+            key = li[first_index + 1:second_index]
             val = get_float(li)
             pere[key] = val
         return pere
 
-    def.get_elevation(self, x_points, y_points):
-        input_shape =
-        object_point = np.array(self.pointcloud_3D)
-        sampling = griddata(object_point[:, :2], object_point[:, 2], sampling_point[:, :2], method='linear')
+    # TODO: get_elevation函数未实现，可参考插值获取任意坐标高程。
 
 
-
+# 以下为主流程demo，可供命令行/脚本调用和参考
 if __name__ == "__main__":
-
-    # 读取左右两幅双目图像
+    # 读取左右两幅双目图像（预处理函数需自定义）
     img_A = cv2.imread(".//group1//416.png")
     img_B = cv2.imread(".//group1//417.png")
     img_A = preprocess(img_A)
     img_B = preprocess(img_B)
     h, w = img_A.shape[:2]
 
-    # 载入xml文件
-    obj_xml = ana_photoscan_xml("group1.xml") # LCAM_all_camera.xml   group1.xml
+    # 载入xml文件并初始化分析对象
+    obj_xml = ana_photoscan_xml("group1.xml")
 
-    # 将xml文件中的位姿保存至csv文件中
+    # 导出所有相机姿态到CSV
     obj_xml.save_xml_pose("xml_pos.csv")
 
-    # 读取畸变参数
+    # 读取相机畸变参数
     distor = obj_xml.get_Distortion()
     dist_coeffs = np.array([distor["K1"], distor["K2"], distor["P1"], distor["P2"], distor["K3"]])
 
-    # 按关键词检索，得到相机内参矩阵、外参矩阵、编号
+    # 按关键词获取内参/外参矩阵及编号
     img_A_K, img_A_pose, num_A = obj_xml.get_cam_parameter_matrix("-0416")
     img_B_K, img_B_pose, num_B = obj_xml.get_cam_parameter_matrix("-0417")
 
-    # 查看相机的向量五点，左上，右上，左下，右下，中间，相机中心
+    # 查看某相机五点投影射线
     img_name, rays_o, rays_d = obj_xml.get_rays_np_around_five_point(num_A)
     print("Camera ID: %d  " % num_A, " Camera Name: %s  " % img_name)
     print("Camera Original Point: ", rays_o)
     print("Camera Vector Direction: ", rays_d)
 
-    # 查看一副影像所有像素点的向量的方向
+    # 查看影像所有像素点射线方向并可视化
     img_name, rays_o, rays_d_mesh = obj_xml.get_rays_np_all_pixel_directiont(num_A, True)
 
-    # 绘制所有相机的指向图
+    # 绘制所有相机投影向量三维图
     obj_xml.draw_pose_vector(10)
 
-    # 保存三维点云数据
+    # 保存三维点云（SHP和MAT两种格式）
     obj_xml.save_pointcloud_3d("Pointcloud3D.shp")
     obj_xml.save_pointcloud_3d("Pointcloud3D.mat")
 
-    # 生成img点至点云的对应txt文件，用于arcgis配准，将影像贴图到点云的DEM上使用。
-        ########################################################
-        ###    第一列        第二列       第三列       第四列    ###
-        ###  同名点图像x   同名点图像y   同名点点云x   同名点点云y  ###
-        ########################################################
+    # 生成ArcGIS配准用TXT文件
     obj_xml.get_img_to_pointcloud_corresponding_for_arcgis(num_A)
 
-    # 读取影像的同名点以及三维点
+    # 获取影像同名点与三维点对
     cor_3D_A, cor_2D_A = obj_xml.get_img_to_pointcloud_corresponding(num_A)
 
-    # 使用opencv_PNP验证位姿结果。输入三维点、像素点、摄象机内参、畸变系数。解算摄象机外参
+    # 用OpenCV PNP算法验证相机外参（外部函数需自定义）
     bace_opencv_pose_A = opencv_PNP(cor_3D_A, cor_2D_A, img_A_K, dist_coeffs)
     print("Base_Opencv_sovle_pose:  \n")
     print(bace_opencv_pose_A)
     print("XML_pose:  \n")
     print(img_A_pose)
 
-    # 读取两幅影像之间的同名点以及对应的三位点
+    # 获取两幅影像同名点及三维点
     ptinA, ptinB, cor_3D_AB = obj_xml.get_img_to_pointcloud_corresponding_couple(num_A, num_B)
     bace_opencv_pose_B = opencv_PNP(cor_3D_AB, ptinB, img_A_K, dist_coeffs)
     print("Base_Opencv_sovle_pose:  \n")
@@ -441,5 +517,5 @@ if __name__ == "__main__":
     print("XML_pose:  \n")
     print(img_B_pose)
 
-    # 绘制同名点匹配图
+    # 绘制同名点匹配效果图（draw_Match为自定义工具函数）
     draw_Match(img_A, img_B, ptinA, ptinB, save_path="./match.jpg", draw_num=500)
