@@ -8,7 +8,6 @@ import random
 from scipy.io import savemat
 
 
-# from Analyse3DTools import opencv_PNP, preprocess, draw_Match
 
 def get_str(cxx):
     """
@@ -105,7 +104,7 @@ class ana_photoscan_xml(object):
         Args:
             path (str): 输出CSV文件名，默认为"xml_information.csv"。
         """
-        csvF = open(path, 'w', newline="")
+        csvF = open(path, 'w', newline="", encoding='utf-8')
         csv_writer = csv.writer(csvF)
         csv_writer.writerow(["NAME",
                              "M00", "M01", "M02",
@@ -209,7 +208,7 @@ class ana_photoscan_xml(object):
         Args:
             path (str): 输出文件名，默认为"five_point_vector.csv"。
         """
-        csvF = open(path, 'w', newline="")
+        csvF = open(path, 'w', newline="", encoding='utf-8')
         csv_writer = csv.writer(csvF)
         csv_writer.writerow(["NAME",
                              "base_x", "base_y", "base_z",
@@ -291,7 +290,7 @@ class ana_photoscan_xml(object):
         """
         img_name = self.camera_pose[num][0]
         find_key_word = "<PhotoId>%d</PhotoId>" % num
-        f = open(self.xml_name, 'r')
+        f = open(self.xml_name, 'r', encoding='utf-8')
         fpList = f.readlines()
         corresponding_list = []
         for row, inf in enumerate(fpList):
@@ -328,7 +327,7 @@ class ana_photoscan_xml(object):
         """
         img_name = self.camera_pose[num][0]
         find_key_word = "<PhotoId>%d</PhotoId>" % num
-        f = open(self.xml_name, 'r')
+        f = open(self.xml_name, 'r', encoding='utf-8')
         fpList = f.readlines()
         corresponding_list_3D = []
         corresponding_list_2D = []
@@ -370,7 +369,7 @@ class ana_photoscan_xml(object):
         find_key_word_1 = "<PhotoId>%d</PhotoId>" % num1
         img_name_2 = self.camera_pose[num2][0]
         find_key_word_2 = "<PhotoId>%d</PhotoId>" % num2
-        f = open(self.xml_name, 'r')
+        f = open(self.xml_name, 'r', encoding='utf-8')
         fpList = f.readlines()
         img1_list = []
         img2_list = []
@@ -429,7 +428,7 @@ class ana_photoscan_xml(object):
         Returns:
             dict: 相机畸变系数字典（如K1、K2、P1、P2、K3等）
         """
-        f = open(self.xml_name, 'r')
+        f = open(self.xml_name, 'r', encoding='utf-8')
         fpList = f.readlines()
         corresponding_list = []
         for row, inf in enumerate(fpList):
