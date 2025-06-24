@@ -38,6 +38,35 @@ def get_float(cxx):
     cxx_r = float(cxx[cxxStart:cxxEnd])
     return cxx_r
 
+def draw_points_on_image(image, points, half_size=5, output_mode=None):
+    """
+       在图像上绘制点的方框标记，支持显示/返回/保存。
+
+       Args:
+           image (ndarray): 输入图像（OpenCV格式）。
+           points (array-like): 要绘制的点集，每个点为(x, y)。
+           half_size (int): 方框一半宽度，默认5。
+           output_mode: None=窗口显示，1=返回绘制后图像，其它=输出文件路径并保存。
+
+       Returns:
+           若output_mode==1，则返回带标记的图像，否则无返回值。
+       """
+    # 绘制图像同名点
+    for (x, y) in points:
+        top_left = (int(x - half_size), int(y - half_size))
+        bottom_right = (int(x + half_size), int(y + half_size))
+        cv2.rectangle(image, top_left, bottom_right, color=(255, 0, 0), thickness=1)
+
+    if output_mode is None:
+        cv2.imshow('Image with Points', image)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+    elif output_mode == 1:
+        return image
+    else:
+        cv2.imwrite(output_mode, image)
+        print(f"Save Success {output_mode}")
+
 
 class ana_photoscan_xml(object):
     """
@@ -536,3 +565,75 @@ class ana_photoscan_xml(object):
         corresponding_list_2D = np.array(corresponding_list_2D)
         corresponding_list_color = np.array(corresponding_list_color)
         return corresponding_list_3D, corresponding_list_2D, corresponding_list_color
+
+    def point_and_camera_display(self, num_list, point_size=2, camera_box_size = 2, imshow_range_x = None, imshow_range_y = None, imshow_range_z = (-40, 40)):
+        """
+         三维可视化显示指定相机视角下的同名点彩色点云与相机位置/姿态。
+
+         支持多个相机叠加显示，点云以RGB着色。相机用红色点、绿色相机框和投影方向箭头标注。
+
+         Args:
+             num_list (list of int): 要显示的相机索引列表（如[0, 1, 2]）。
+             point_size (int, optional): 点云渲染的单点尺寸，默认2。
+             camera_box_size (float, optional): 单个相机框/视锥体的显示缩放，默认2。
+             imshow_range_x (tuple or None, optional): X轴显示范围，如(xmin, xmax)。None为自适应。
+             imshow_range_y (tuple or None, optional): Y轴显示范围，如(ymin, ymax)。None为自适应。
+             imshow_range_z (tuple or None, optional): Z轴显示范围，如(zmin, zmax)。默认为(-40, 40)。
+
+         Returns:
+             None
+
+         功能说明：
+             - 绘制每个指定相机的：
+                 - 同名点的3D点云（彩色/RGB）
+                 - 相机中心位置（红点）
+                 - 相机姿态投影方向（红色箭头）
+                 - 绿色边框模拟相机主视框
+             - 可叠加多个相机及其点云
+             - 可手动指定显示区域范围，便于聚焦目标区
+             - 适用于空间结构理解、点云质量和相机分布直观核查
+         """
+        # num_list : 相机列表
+        # point_size=2 显示时，点云，每个点的大小
+        # camera_box_size = 2 显示时，照相机的大小
+        # imshow_range_x = None  坐标轴范围
+        # imshow_range_y = None  坐标轴范围
+        # imshow_range_z = (-40, 40) 坐标轴范围
+        fig = plt.figure(figsize=(8, 8))
+        ax1 = fig.add_subplot(111, projection='3d')
+
+        for num_A in num_list:
+            point_3d, point_2d, point_color = self.get_img_to_pointcloud_corresponding_with_color(num_A)
+            img_name, rays_o, rays_d = self.get_rays_np_around_five_point(num_A)
+
+            ax1.scatter(point_3d[:, 0], point_3d[:, 1], point_3d[:, 2], c=point_color, s=point_size, alpha=0.8)
+            ax1.scatter(rays_o[0, 0], rays_o[0, 1], rays_o[0, 2], c='red', s=10, label='Camera')
+            ax1.set_box_aspect([1, 1, 1])
+            ax1.quiver(rays_o[0, 0], rays_o[0, 1], rays_o[0, 2], rays_d[4][0], rays_d[4][1], rays_d[4][2], length=3, color='red', arrow_length_ratio=0.1)
+            for i in range(4):
+                norm_d = rays_d[i] / np.linalg.norm(rays_d[i])
+                x_cb = [rays_o[0, 0], rays_o[0, 0] + norm_d[0] * camera_box_size]
+                y_cb = [rays_o[0, 1], rays_o[0, 1] + norm_d[1] * camera_box_size]
+                z_cb = [rays_o[0, 2], rays_o[0, 2] + norm_d[2] * camera_box_size]
+                ax1.plot(x_cb, y_cb, z_cb, "g-", linewidth=2)
+            list_box = [0, 1, 3, 2, 0]
+            for i in range(4):
+                norm_a = rays_d[list_box[i]] / np.linalg.norm(rays_d[list_box[i]])
+                norm_b = rays_d[list_box[i+1]] / np.linalg.norm(rays_d[list_box[i+1]])
+                x_cb = [rays_o[0, 0] + norm_a[0]*camera_box_size, rays_o[0, 0] + norm_b[0]*camera_box_size]
+                y_cb = [rays_o[0, 1] + norm_a[1]*camera_box_size, rays_o[0, 1] + norm_b[1]*camera_box_size]
+                z_cb = [rays_o[0, 2] + norm_a[2]*camera_box_size, rays_o[0, 2] + norm_b[2]*camera_box_size]
+                ax1.plot(x_cb, y_cb, z_cb, "g-", linewidth=2)
+
+        if imshow_range_x is not None:
+            ax1.set_xlim(imshow_range_x[0], imshow_range_x[1])
+        if imshow_range_y is not None:
+            ax1.set_ylim(imshow_range_y[0], imshow_range_y[1])
+        if imshow_range_z is not None:
+            ax1.set_zlim(imshow_range_z[0], imshow_range_z[1])
+
+        ax1.set_xlabel('X')
+        ax1.set_ylabel('Y')
+        ax1.set_zlabel('Z')
+        ax1.set_title('3D Point Cloud')
+        plt.show()
