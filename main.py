@@ -13,12 +13,15 @@ Photoscan 空中三角测量 XML 工具库的主要功能演示 Demo
 - 影像-点云配准对应关系（2D/3D）导出
 - 畸变参数获取
 - 关键参数查找与可视化
+- 3D相机与点云可视化
+- 原始影像上2D同名点高亮显示
 
 确保 testdata/255.xml 文件已存在。
 """
 
-from PhotoscanXMLAnalyse import ana_photoscan_xml
+from PhotoscanXMLAnalyse import ana_photoscan_xml, draw_points_on_image
 import numpy as np
+import cv2
 
 def main():
     # ========== 1. 设置XML相对路径 ==========
@@ -97,6 +100,23 @@ def main():
     for i, (xy, z) in enumerate(zip(test_points, elevations)):
         print(f"[插值高程] 第{i + 1}个点 (x={xy[0]:.3f}, y={xy[1]:.3f}) -> z={z:.3f}")
 
+    # ========== 15. 三维可视化：显示第一个相机的点云与姿态 ==========
+    print("[三维可视化] 显示第0号相机的点云与姿态")
+    obj_xml.point_and_camera_display([0], point_size=3, camera_box_size=3)
+    # 如需显示多个相机：obj_xml.point_and_camera_display([0, 1, 2])
+
+    # ========== 16. 在影像上绘制2D同名点并弹窗显示 ==========
+    image_path = f"testdata/255/{img_name}"  # img_name 是当前相机影像名
+    try:
+        image = cv2.imread(image_path)
+        if image is not None:
+            draw_points_on_image(image, cor_2D, half_size=5, output_mode=None)  # output_mode=None为弹窗显示
+            # 如需保存到文件：
+            # draw_points_on_image(image, cor_2D, half_size=5, output_mode="testdata/255/with_points.jpg")
+        else:
+            print(f"[警告] 未找到影像文件：{image_path}，请检查路径和文件名。")
+    except Exception as e:
+        print(f"[错误] 图像读取或绘制失败：{e}")
 
 if __name__ == "__main__":
     main()

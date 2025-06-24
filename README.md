@@ -27,7 +27,7 @@
 │   ├─ information_2CL.csv    # 影像与位置信息的对应表
 ```
 
-**说明**：
+**说明：**
 
 * `testdata/255/` 为影像文件夹，存放255站点拍摄的原始影像（如有需要可自行添加影像）。
 * `testdata/information_2CL.csv` 为影像的位置信息（如像控点、外参等辅助数据）。
@@ -45,8 +45,10 @@
 * 支持三维可视化分析（相机投影向量、点云等）
 * 查询点云空间范围（XYZ轴最大最小值）
 * 任意坐标点高程插值（点云地形断面获取）
-* 兼容外部工具（如 OpenCV PNP、ArcGIS DEM）
 * **支持提取三维点云与影像同名点的RGB颜色信息，实现彩色点云重建**
+* **三维可视化显示指定相机点云与姿态（`point_and_camera_display`，新功能）**
+* **在原始影像上高亮/保存同名点标记（`draw_points_on_image`，新功能）**
+* 兼容外部工具（如 OpenCV PNP、ArcGIS DEM）
 
 ---
 
@@ -94,6 +96,8 @@ pip install -e .
 * 三维点云数据导出（SHP/MAT格式）
 * 影像-点云配准对应关系（2D/3D）导出
 * 影像-点云-颜色三元组（2D/3D/RGB）提取（**新功能**）
+* 三维可视化显示指定相机点云与姿态（**新功能**）
+* 在原始影像上高亮/保存同名点（**新功能**）
 * 畸变参数获取
 * 关键参数查找与可视化
 * 查询三维点云空间范围（XYZ轴最大最小值）
@@ -102,84 +106,28 @@ pip install -e .
 #### 推荐调用流程如下：
 
 ```python
-from PhotoscanXMLAnalyse import ana_photoscan_xml
+from PhotoscanXMLAnalyse import ana_photoscan_xml, draw_points_on_image
 import numpy as np
+import cv2
 
 def main():
     # ========== 1. 设置XML相对路径 ==========
     xml_path = "testdata/255.xml"
     obj_xml = ana_photoscan_xml(xml_path)
 
-    # ========== 2. 导出全部相机位姿为CSV ==========
-    obj_xml.save_xml_pose("testdata/xml_information.csv")
+    # ...（略去前面功能示例，见 main.py）...
 
-    # ========== 3. 获取第一个相机的五点向量 ==========
-    camera_num = 0  # 影像编号（从0起）
-    img_name, rays_o, rays_d = obj_xml.get_rays_np_around_five_point(camera_num)
-    print(f"[五点射线] 相机: {img_name}\n 原点: {rays_o}\n 方向: {rays_d}")
+    # ========== 15. 三维可视化：显示第0号相机的点云与姿态（新功能） ==========
+    obj_xml.point_and_camera_display([0], point_size=3, camera_box_size=3)
 
-    # ========== 4. 批量保存所有相机的五点射线 ==========
-    obj_xml.save_five_point_vector("testdata/five_point_vector.csv")
-
-    # ========== 5. 绘制所有相机三维指向箭头图（3D） ==========
-    obj_xml.draw_pose_vector(size=0.1)
-
-    # ========== 6. 获取并可视化全部像素点的投影方向（可选） ==========
-    img_name, rays_o, rays_d_full = obj_xml.get_rays_np_all_pixel_directiont(camera_num, show_key=True)
-
-    # ========== 7. 保存三维点云为SHP、MAT文件 ==========
-    obj_xml.save_pointcloud_3d("testdata/pointcloud3d.shp")
-    obj_xml.save_pointcloud_3d("testdata/pointcloud3d.mat")
-
-    # ========== 8. 生成ArcGIS影像-点云配准TXT ==========
-    obj_xml.get_img_to_pointcloud_corresponding_for_arcgis(camera_num)
-    print(f"ArcGIS影像-点云配准TXT已输出到: {img_name}.txt")
-
-    # ========== 9. 获取单幅影像所有2D-3D同名点 ==========
-    cor_3D, cor_2D = obj_xml.get_img_to_pointcloud_corresponding(camera_num)
-    print(f"[同名点3D] 形状: {cor_3D.shape}, [同名点2D] 形状: {cor_2D.shape}")
-
-    # ========== 9+. 获取单幅影像所有2D-3D同名点及颜色信息（新功能） ==========
-    cor_3D, cor_2D, cor_color = obj_xml.get_img_to_pointcloud_corresponding_with_color(camera_num)
-    print(f"[同名点3D] 形状: {cor_3D.shape}, [同名点2D] 形状: {cor_2D.shape}, [颜色] 形状: {cor_color.shape}")
-    print("前5个同名点（三维坐标 | 二维像素 | RGB颜色）：")
-    for i in range(min(5, cor_3D.shape[0])):
-        print(f"  3D: {cor_3D[i]}, 2D: {cor_2D[i]}, Color: {cor_color[i]}")
-
-    # ========== 10. 获取两幅影像的同名点和三维点 ==========
-    if len(obj_xml.camera_pose) > 1:
-        img1_points, img2_points, cloud_points = obj_xml.get_img_to_pointcloud_corresponding_couple(0, 1)
-        print(f"[两幅影像同名点] 影像1点数: {len(img1_points)}, 影像2点数: {len(img2_points)}, 三维点数: {len(cloud_points)}")
-
-    # ========== 11. 查找相机内参/外参及索引（通过影像名关键字） ==========
-    keyword = ".jpg"  # 你也可以用其他实际文件名的特征（如 "-0416"）
-    result = obj_xml.get_cam_parameter_matrix(keyword)
-    if result is not None:
-        K, pose, idx = result
-        print("[查找相机参数] 索引:", idx)
-        print("K (内参矩阵):\n", K)
-        print("Pose (外参矩阵):\n", pose)
-    else:
-        print(f"未找到包含关键字 {keyword} 的影像")
-
-    # ========== 12. 获取畸变参数 ==========
-    distortion_dict = obj_xml.get_Distortion()
-    print("[畸变参数]", distortion_dict)
-
-    # ========== 13. 查询三维点云空间范围（XYZ轴最大最小值） ==========
-    min_x, max_x, min_y, max_y, min_z, max_z = obj_xml.check_cloud_range()
-    print(f"[点云空间范围] X: {min_x:.3f} ~ {max_x:.3f}，Y: {min_y:.3f} ~ {max_y:.3f}，Z: {min_z:.3f} ~ {max_z:.3f}")
-
-    # ========== 14. 获取指定点的高程值（点云插值） ==========
-    # 示例取空间范围三点：中心、左下、右上
-    test_points = np.array([
-        [(min_x + max_x) / 2, (min_y + max_y) / 2],  # 中心点
-        [min_x, min_y],                              # 左下角
-        [max_x, max_y],                              # 右上角
-    ])
-    elevations = obj_xml.get_elevation(test_points)
-    for i, (xy, z) in enumerate(zip(test_points, elevations)):
-        print(f"[插值高程] 第{i+1}个点 (x={xy[0]:.3f}, y={xy[1]:.3f}) -> z={z:.3f}")
+    # ========== 16. 影像上绘制同名点弹窗显示/保存（新功能） ==========
+    img_name, _, _ = obj_xml.get_rays_np_around_five_point(0)
+    cor_3D, cor_2D, _ = obj_xml.get_img_to_pointcloud_corresponding_with_color(0)
+    img_path = f"testdata/255/{img_name}"  # 根据你的影像目录组织
+    image = cv2.imread(img_path)
+    if image is not None:
+        draw_points_on_image(image, cor_2D, half_size=5, output_mode=None)  # output_mode=None为弹窗显示
+        # draw_points_on_image(image, cor_2D, half_size=5, output_mode="output_with_points.jpg")
 
 if __name__ == "__main__":
     main()
@@ -207,6 +155,8 @@ if __name__ == "__main__":
 | `get_Distortion()`                                       | 获取畸变参数                                         | 无                        | 畸变参数字典                                         |
 | `check_cloud_range()`                                    | 查询点云的空间范围（XYZ轴最大最小值）                           | 无                        | min\_x, max\_x, min\_y, max\_y, min\_z, max\_z |
 | `get_elevation(points)`                                  | 点云插值获取指定点高程                                    | points: \[n,2]点坐标        | n个点的高程数组                                       |
+| `point_and_camera_display(num_list, ...)`                | 三维可视化显示指定相机的同名点云、相机位置及视锥体等（**新功能**）            | `num_list`：相机索引列表        | None                                           |
+| `draw_points_on_image(image, points, ...)`               | 在影像上绘制点标记并弹窗/保存/返回（**新功能**，工具函数，类外）            | `image`，`points`，...     | 返回新图（或弹窗/保存）                                   |
 
 ---
 
@@ -225,9 +175,17 @@ cor_3D, cor_2D = obj_xml.get_img_to_pointcloud_corresponding(num)
 # 新增功能演示：获取三维点、二维点及颜色
 cor_3D, cor_2D, cor_color = obj_xml.get_img_to_pointcloud_corresponding_with_color(num)
 print("前5个点：", cor_3D[:5], cor_2D[:5], cor_color[:5])
-min_x, max_x, min_y, max_y, min_z, max_z = obj_xml.check_cloud_range()
-points = np.array([[min_x, min_y], [(min_x+max_x)/2, (min_y+max_y)/2]])
-elevations = obj_xml.get_elevation(points)
+
+# 三维可视化
+obj_xml.point_and_camera_display([0, 1])
+
+# 在影像上绘制同名点
+from PhotoscanXMLAnalyse import draw_points_on_image
+import cv2
+image = cv2.imread("testdata/255/xxx.jpg")  # 替换成实际影像
+if image is not None:
+    draw_points_on_image(image, cor_2D, half_size=5, output_mode=None)  # 弹窗
+    # draw_points_on_image(image, cor_2D, half_size=5, output_mode="out.jpg")  # 保存
 ```
 
 ---
