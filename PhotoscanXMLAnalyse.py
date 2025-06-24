@@ -68,6 +68,109 @@ def draw_points_on_image(image, points, half_size=5, output_mode=None):
         print(f"Save Success {output_mode}")
 
 
+def project_3d_to_2d(points_3d, K, Rt, dist_coeffs=None, image=None, output_mode=None, WH=(2048, 2048), half_size=5):
+    R = Rt[:3, :3]
+    t = np.expand_dims(Rt[:3, 3], axis=-1)
+    t = np.array([t[1], t[2], t[0]])
+
+    P_c = (R @ points_3d[:, :3].T + t).T
+    x = P_c[:, 0] / P_c[:, 2]
+    y = P_c[:, 1] / P_c[:, 2]
+
+    if dist_coeffs is not None:
+        k1, k2, p1, p2, k3 = dist_coeffs
+        r2 = x**2 + y**2
+        x_dist = x * (1 + k1*r2 + k2*r2**2 + k3*r2**3) + 2*p1*x*y + p2*(r2 + 2*x**2)
+        y_dist = y * (1 + k1*r2 + k2*r2**2 + k3*r2**3) + p1*(r2 + 2*y**2) + 2*p2*x*y
+        x, y = x_dist, y_dist
+
+    u = K[0, 0] * x + K[0, 2]
+    v = K[1, 1] * y + K[1, 2]
+    points = np.column_stack([u, v])
+
+    if image is None:
+        image = np.zeros((WH[0], WH[1], 3), dtype=np.uint8)
+
+    for (x, y) in points:
+        top_left = (int(x - half_size), int(y - half_size))
+        bottom_right = (int(x + half_size), int(y + half_size))
+        cv2.rectangle(image, top_left, bottom_right, color=(0, 255, 0), thickness=1)
+
+    if output_mode is None:
+        cv2.imshow('Image with Points', cv2.resize(image, (400, 400)))
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+    elif output_mode == 1:
+        return np.column_stack([u, v])
+    else:
+        cv2.imwrite(output_mode, image)
+        print(f"Save Success {output_mode}")
+
+
+def project_3d_to_2d(points_3d, K, Rt, dist_coeffs=None, image=None, output_mode=None, WH=(2048, 2048), half_size=5):
+    """
+       将三维点云投影到二维影像平面（支持径向/切向畸变），并可在影像上可视化。
+
+       Project 3D points to 2D image plane using camera intrinsics/extrinsics and optional distortion.
+       Optionally draw results on image or save to file.
+
+       Args:
+           points_3d (ndarray): 输入三维点云，shape=[N,3]，每行为(x, y, z)
+           K (ndarray): 相机内参矩阵，shape=[3,3]
+           Rt (ndarray): 相机外参矩阵（旋转+平移），shape=[3,4]或[4,4]
+           dist_coeffs (list or None): 相机畸变参数[k1, k2, p1, p2, k3]，可选
+           image (ndarray or None): 作为底图的输入图像，可选（如为None则生成空白图）
+           output_mode (None/int/str): None=窗口显示，1=返回2D坐标，字符串=文件名并保存结果
+           WH (tuple): 输出影像分辨率（宽, 高），默认为(2048,2048)
+           half_size (int): 绘制点标记方框一半宽度，默认为5
+
+       Returns:
+           None 或 ndarray: 若 output_mode==1 返回投影后的2D像素坐标[N,2]，否则无返回值
+
+       功能说明：
+           - 支持将任意三维点通过内外参和畸变模型投影到指定影像
+           - 可选择直接绘制在指定图像上（或生成新空白底图）
+           - 可窗口交互查看、返回2D点坐标、或直接文件输出
+           - 常用于点云重投影、结构验证、误差分析、成果展示等场景
+       """
+    R = Rt[:3, :3]
+    t = np.expand_dims(Rt[:3, 3], axis=-1)
+    t = np.array([t[1], t[2], t[0]])
+
+    P_c = (R @ points_3d[:, :3].T + t).T
+    x = P_c[:, 0] / P_c[:, 2]
+    y = P_c[:, 1] / P_c[:, 2]
+
+    if dist_coeffs is not None:
+        k1, k2, p1, p2, k3 = dist_coeffs
+        r2 = x**2 + y**2
+        x_dist = x * (1 + k1*r2 + k2*r2**2 + k3*r2**3) + 2*p1*x*y + p2*(r2 + 2*x**2)
+        y_dist = y * (1 + k1*r2 + k2*r2**2 + k3*r2**3) + p1*(r2 + 2*y**2) + 2*p2*x*y
+        x, y = x_dist, y_dist
+
+    u = K[0, 0] * x + K[0, 2]
+    v = K[1, 1] * y + K[1, 2]
+    points = np.column_stack([u, v])
+
+    if image is None:
+        image = np.zeros((WH[0], WH[1], 3), dtype=np.uint8)
+
+    for (x, y) in points:
+        top_left = (int(x - half_size), int(y - half_size))
+        bottom_right = (int(x + half_size), int(y + half_size))
+        cv2.rectangle(image, top_left, bottom_right, color=(0, 255, 0), thickness=1)
+
+    if output_mode is None:
+        cv2.imshow('Image with Points', cv2.resize(image, (400, 400)))
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+    elif output_mode == 1:
+        return np.column_stack([u, v])
+    else:
+        cv2.imwrite(output_mode, image)
+        print(f"Save Success {output_mode}")
+
+
 class ana_photoscan_xml(object):
     """
     Photoscan空三角测量XML文件分析主类。
