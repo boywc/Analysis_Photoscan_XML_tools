@@ -481,3 +481,58 @@ class ana_photoscan_xml(object):
         object_point = np.array(self.pointcloud_3D)
         sampling = griddata(object_point[:, :2], object_point[:, 2], points, method='linear')
         return sampling
+
+    def get_img_to_pointcloud_corresponding_with_color(self, num):
+        """
+           获取单幅影像所有同名点的三维点坐标、二维像素位置及其颜色信息。
+
+           Args:
+               num (int): 相机索引编号（从0开始）
+
+           Returns:
+               tuple:
+                   - corresponding_list_3D (ndarray): 同名三维点坐标，形状为[N, 3]
+                   - corresponding_list_2D (ndarray): 对应二维像素坐标，形状为[N, 2]
+                   - corresponding_list_color (ndarray): 对应颜色值(R,G,B)，形状为[N, 3]
+
+           """
+        img_name = self.camera_pose[num][0]
+        find_key_word = "<PhotoId>%d</PhotoId>" % num
+
+        f = open(self.xml_name, 'r', encoding='utf-8')  # 读取文件
+        fpList = f.readlines()  # 内容生成列表
+
+        corresponding_list_3D = []
+        corresponding_list_2D = []
+        corresponding_list_color = []
+        for row, inf in enumerate(fpList):
+            inf = str(inf)
+            if inf.find('<TiePoint>') != -1:
+                x_point_cloud = get_float(str(fpList[row + 2]))
+                y_point_cloud = get_float(str(fpList[row + 3]))
+                z_point_cloud = get_float(str(fpList[row + 4]))
+
+                color_R = get_float(str(fpList[row + 7]))
+                color_G = get_float(str(fpList[row + 8]))
+                color_B = get_float(str(fpList[row + 9]))
+
+                start_tie_line = row
+                son_i = 0
+                while True:
+                    row_inf = str(fpList[start_tie_line + son_i])
+                    if row_inf.find('</TiePoint>') != -1:
+                        end_tie_line = start_tie_line + son_i
+                        break
+                    son_i += 1
+
+                for son_num, block_line in enumerate(fpList[start_tie_line:end_tie_line]):
+                    if block_line.find(find_key_word) != -1:
+                        x_img = get_float(str(fpList[row + son_num + 1]))
+                        y_img = get_float(str(fpList[row + son_num + 2]))
+                        corresponding_list_3D.append([x_point_cloud, y_point_cloud, z_point_cloud])
+                        corresponding_list_2D.append([x_img, y_img])
+                        corresponding_list_color.append([color_R, color_G, color_B])
+        corresponding_list_3D = np.array(corresponding_list_3D)
+        corresponding_list_2D = np.array(corresponding_list_2D)
+        corresponding_list_color = np.array(corresponding_list_color)
+        return corresponding_list_3D, corresponding_list_2D, corresponding_list_color
