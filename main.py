@@ -1,7 +1,7 @@
 """
 main.py
 
-Photoscan 空三角测量 XML 工具库的主要功能演示 Demo
+Photoscan 空中三角测量 XML 工具库的主要功能演示 Demo
 
 本脚本演示如何调用 PhotoscanXMLAnalyse.py 提供的 ana_photoscan_xml 类，
 进行如下常见航空摄影测量数据处理任务：
@@ -54,6 +54,13 @@ def main():
     # ========== 9. 获取单幅影像所有2D-3D同名点 ==========
     cor_3D, cor_2D = obj_xml.get_img_to_pointcloud_corresponding(camera_num)
     print(f"[同名点3D] 形状: {cor_3D.shape}, [同名点2D] 形状: {cor_2D.shape}")
+
+    # ========== 9+. 获取单幅影像所有2D-3D同名点及颜色信息 ==========
+    cor_3D, cor_2D, cor_color = obj_xml.get_img_to_pointcloud_corresponding_with_color(camera_num)
+    print(f"[同名点3D] 形状: {cor_3D.shape}, [同名点2D] 形状: {cor_2D.shape}, [颜色] 形状: {cor_color.shape}")
+    print("前5个同名点（三维坐标 | 二维像素 | RGB颜色）：")
+    for i in range(min(5, cor_3D.shape[0])):
+        print(f"  3D: {cor_3D[i]}, 2D: {cor_2D[i]}, Color: {cor_color[i]}")
 
     # ========== 10. 获取两幅影像的同名点和三维点 ==========
     if len(obj_xml.camera_pose) > 1:

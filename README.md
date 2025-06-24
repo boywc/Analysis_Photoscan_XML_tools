@@ -46,6 +46,7 @@
 * 查询点云空间范围（XYZ轴最大最小值）
 * 任意坐标点高程插值（点云地形断面获取）
 * 兼容外部工具（如 OpenCV PNP、ArcGIS DEM）
+* **支持提取三维点云与影像同名点的RGB颜色信息，实现彩色点云重建**
 
 ---
 
@@ -92,6 +93,7 @@ pip install -e .
 * 相机五点射线与全部像素射线方向获取与保存
 * 三维点云数据导出（SHP/MAT格式）
 * 影像-点云配准对应关系（2D/3D）导出
+* 影像-点云-颜色三元组（2D/3D/RGB）提取（**新功能**）
 * 畸变参数获取
 * 关键参数查找与可视化
 * 查询三维点云空间范围（XYZ轴最大最小值）
@@ -136,6 +138,13 @@ def main():
     # ========== 9. 获取单幅影像所有2D-3D同名点 ==========
     cor_3D, cor_2D = obj_xml.get_img_to_pointcloud_corresponding(camera_num)
     print(f"[同名点3D] 形状: {cor_3D.shape}, [同名点2D] 形状: {cor_2D.shape}")
+
+    # ========== 9+. 获取单幅影像所有2D-3D同名点及颜色信息（新功能） ==========
+    cor_3D, cor_2D, cor_color = obj_xml.get_img_to_pointcloud_corresponding_with_color(camera_num)
+    print(f"[同名点3D] 形状: {cor_3D.shape}, [同名点2D] 形状: {cor_2D.shape}, [颜色] 形状: {cor_color.shape}")
+    print("前5个同名点（三维坐标 | 二维像素 | RGB颜色）：")
+    for i in range(min(5, cor_3D.shape[0])):
+        print(f"  3D: {cor_3D[i]}, 2D: {cor_2D[i]}, Color: {cor_color[i]}")
 
     # ========== 10. 获取两幅影像的同名点和三维点 ==========
     if len(obj_xml.camera_pose) > 1:
@@ -182,21 +191,22 @@ if __name__ == "__main__":
 
 ## API 参考手册
 
-| 方法名                                                      | 功能描述                      | 参数说明                     | 返回值                                            |
-| -------------------------------------------------------- | ------------------------- | ------------------------ | ---------------------------------------------- |
-| `ana_photoscan_xml(xml_file)`                            | 读取 XML 文件，创建解析对象          | `xml_file`: XML文件名       | 类对象                                            |
-| `save_xml_pose(filename=None)`                           | 保存相机位姿 CSV                | `filename`: 文件名（可选）      | 无                                              |
-| `get_rays_np_around_five_point(num)`                     | 获取相机5点（四角+中心）向量           | `num`: 影像编号              | img名, 原点, 方向                                   |
-| `save_five_point_vector(filename=None)`                  | 批量保存所有相机五点向量              | `filename`: 文件名（可选）      | 无                                              |
-| `draw_pose_vector(size=0.2)`                             | 绘制所有相机姿态三维箭头图             | `size`: 向量缩放因子           | 无                                              |
-| `save_pointcloud_3d(save_path)`                          | 导出三维点云为 SHP 或 MAT         | `save_path`: 文件名（后缀自动判别） | 无                                              |
-| `get_img_to_pointcloud_corresponding_for_arcgis(num)`    |导出同名点像素坐标与对应的点云XY坐标生成配准txt文件（用于ArcGIS影像配准到DEM） | `num`: 影像编号              | 无                                              |
-| `get_img_to_pointcloud_corresponding(num)`               | 获取某影像2D像素与3D点的全部配对        | `num`: 影像编号              | 3D点数组, 2D点数组                                   |
-| `get_img_to_pointcloud_corresponding_couple(num1, num2)` | 获取两影像同名点与三维点配对            | `num1`, `num2`: 两影像编号    | 2D点1, 2D点2, 3D点数组                              |
-| `get_cam_parameter_matrix(keyword)`                      | 按影像名关键字查找内外参矩阵            | `keyword`: 字符串关键字        | 内参, 外参, 编号                                     |
-| `get_Distortion()`                                       | 获取畸变参数                    | 无                        | 畸变参数字典                                         |
-| `check_cloud_range()`                                    | 查询点云的空间范围（XYZ轴最大最小值）      | 无                        | min\_x, max\_x, min\_y, max\_y, min\_z, max\_z |
-| `get_elevation(points)`                                  | 点云插值获取指定点高程               | points: \[n,2]点坐标        | n个点的高程数组                                       |
+| 方法名                                                      | 功能描述                                           | 参数说明                     | 返回值                                            |
+| -------------------------------------------------------- | ---------------------------------------------- | ------------------------ | ---------------------------------------------- |
+| `ana_photoscan_xml(xml_file)`                            | 读取 XML 文件，创建解析对象                               | `xml_file`: XML文件名       | 类对象                                            |
+| `save_xml_pose(filename=None)`                           | 保存相机位姿 CSV                                     | `filename`: 文件名（可选）      | 无                                              |
+| `get_rays_np_around_five_point(num)`                     | 获取相机5点（四角+中心）向量                                | `num`: 影像编号              | img名, 原点, 方向                                   |
+| `save_five_point_vector(filename=None)`                  | 批量保存所有相机五点向量                                   | `filename`: 文件名（可选）      | 无                                              |
+| `draw_pose_vector(size=0.2)`                             | 绘制所有相机姿态三维箭头图                                  | `size`: 向量缩放因子           | 无                                              |
+| `save_pointcloud_3d(save_path)`                          | 导出三维点云为 SHP 或 MAT                              | `save_path`: 文件名（后缀自动判别） | 无                                              |
+| `get_img_to_pointcloud_corresponding_for_arcgis(num)`    | 导出同名点像素坐标与对应的点云XY坐标生成配准txt文件（用于ArcGIS影像配准到DEM） | `num`: 影像编号              | 无                                              |
+| `get_img_to_pointcloud_corresponding(num)`               | 获取某影像2D像素与3D点的全部配对                             | `num`: 影像编号              | 3D点数组, 2D点数组                                   |
+| `get_img_to_pointcloud_corresponding_with_color(num)`    | 获取某影像2D像素、3D点及颜色(RGB)的全部配对（**新功能**）            | `num`: 影像编号              | 3D点数组, 2D点数组, 颜色数组                             |
+| `get_img_to_pointcloud_corresponding_couple(num1, num2)` | 获取两影像同名点与三维点配对                                 | `num1`, `num2`: 两影像编号    | 2D点1, 2D点2, 3D点数组                              |
+| `get_cam_parameter_matrix(keyword)`                      | 按影像名关键字查找内外参矩阵                                 | `keyword`: 字符串关键字        | 内参, 外参, 编号                                     |
+| `get_Distortion()`                                       | 获取畸变参数                                         | 无                        | 畸变参数字典                                         |
+| `check_cloud_range()`                                    | 查询点云的空间范围（XYZ轴最大最小值）                           | 无                        | min\_x, max\_x, min\_y, max\_y, min\_z, max\_z |
+| `get_elevation(points)`                                  | 点云插值获取指定点高程                                    | points: \[n,2]点坐标        | n个点的高程数组                                       |
 
 ---
 
@@ -212,7 +222,9 @@ obj_xml.draw_pose_vector()
 obj_xml.save_pointcloud_3d("Pointcloud3D.shp")
 obj_xml.get_img_to_pointcloud_corresponding_for_arcgis(num)
 cor_3D, cor_2D = obj_xml.get_img_to_pointcloud_corresponding(num)
-# 新增功能演示
+# 新增功能演示：获取三维点、二维点及颜色
+cor_3D, cor_2D, cor_color = obj_xml.get_img_to_pointcloud_corresponding_with_color(num)
+print("前5个点：", cor_3D[:5], cor_2D[:5], cor_color[:5])
 min_x, max_x, min_y, max_y, min_z, max_z = obj_xml.check_cloud_range()
 points = np.array([[min_x, min_y], [(min_x+max_x)/2, (min_y+max_y)/2]])
 elevations = obj_xml.get_elevation(points)
