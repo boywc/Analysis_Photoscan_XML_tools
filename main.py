@@ -15,11 +15,12 @@ Photoscan 空中三角测量 XML 工具库的主要功能演示 Demo
 - 关键参数查找与可视化
 - 3D相机与点云可视化
 - 原始影像上2D同名点高亮显示
+- 三维点云投影到影像并可视化（新功能）
 
 确保 testdata/255.xml 文件已存在。
 """
 
-from PhotoscanXMLAnalyse import ana_photoscan_xml, draw_points_on_image
+from PhotoscanXMLAnalyse import ana_photoscan_xml, draw_points_on_image, project_3d_to_2d
 import numpy as np
 import cv2
 
@@ -117,6 +118,20 @@ def main():
             print(f"[警告] 未找到影像文件：{image_path}，请检查路径和文件名。")
     except Exception as e:
         print(f"[错误] 图像读取或绘制失败：{e}")
+
+    # ========== 17. 3D点云投影到影像并可视化（新功能） ==========
+    # 获取当前影像的畸变参数、内外参、同名点
+    distortion = obj_xml.get_Distortion()
+    dist_coeffs = np.array([
+        distortion.get("K1", 0), distortion.get("K2", 0),
+        distortion.get("P1", 0), distortion.get("P2", 0), distortion.get("K3", 0)
+    ])
+    img_K, img_pose, img_idx = obj_xml.get_cam_parameter_matrix(img_name.split('.')[0])
+    points_3d, points_2d, _ = obj_xml.get_img_to_pointcloud_corresponding_with_color(img_idx)
+    image_proj_path = f"testdata/255/{img_name}"
+    img_proj = cv2.imread(image_proj_path)
+    project_3d_to_2d(points_3d, img_K, img_pose, dist_coeffs=dist_coeffs,
+                      half_size=5)
 
 if __name__ == "__main__":
     main()

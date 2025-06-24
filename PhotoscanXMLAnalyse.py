@@ -38,7 +38,7 @@ def get_float(cxx):
     cxx_r = float(cxx[cxxStart:cxxEnd])
     return cxx_r
 
-def draw_points_on_image(image, points, half_size=5, output_mode=None):
+def draw_points_on_image(image, points, half_size=5, output_mode=None, resize_shape=(600, 600)):
     """
        在图像上绘制点的方框标记，支持显示/返回/保存。
 
@@ -58,7 +58,8 @@ def draw_points_on_image(image, points, half_size=5, output_mode=None):
         cv2.rectangle(image, top_left, bottom_right, color=(255, 0, 0), thickness=1)
 
     if output_mode is None:
-        cv2.imshow('Image with Points', image)
+        display_img = cv2.resize(image, resize_shape)
+        cv2.imshow('Image with Points', display_img)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
     elif output_mode == 1:
@@ -158,6 +159,11 @@ def project_3d_to_2d(points_3d, K, Rt, dist_coeffs=None, image=None, output_mode
     for (x, y) in points:
         top_left = (int(x - half_size), int(y - half_size))
         bottom_right = (int(x + half_size), int(y + half_size))
+        if top_left[0] < 0 or top_left[1] < 0 or bottom_right[0] < 0 or bottom_right[1] < 0:
+            continue
+        thod = max(WH)
+        if top_left[0] > thod or top_left[1] > thod or bottom_right[0] > thod or bottom_right[1] > thod:
+            continue
         cv2.rectangle(image, top_left, bottom_right, color=(0, 255, 0), thickness=1)
 
     if output_mode is None:

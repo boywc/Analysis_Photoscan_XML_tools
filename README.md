@@ -48,6 +48,9 @@
 * **支持提取三维点云与影像同名点的RGB颜色信息，实现彩色点云重建**
 * **三维可视化显示指定相机点云与姿态（`point_and_camera_display`，新功能）**
 * **在原始影像上高亮/保存同名点标记（`draw_points_on_image`，新功能）**
+* **三维点云投影到影像并可视化（`project_3d_to_2d`，新功能）**
+
+  * 任意三维点云可通过相机内外参和畸变参数准确投影至影像平面，实现成果可视化/误差分析/结构校验等场景
 * 兼容外部工具（如 OpenCV PNP、ArcGIS DEM）
 
 ---
@@ -102,11 +105,12 @@ pip install -e .
 * 关键参数查找与可视化
 * 查询三维点云空间范围（XYZ轴最大最小值）
 * 点云高程插值（如任意平面点获取地形高程）
+* **三维点云投影到影像并可视化（`project_3d_to_2d`，新功能）**
 
 #### 推荐调用流程如下：
 
 ```python
-from PhotoscanXMLAnalyse import ana_photoscan_xml, draw_points_on_image
+from PhotoscanXMLAnalyse import ana_photoscan_xml, draw_points_on_image, project_3d_to_2d
 import numpy as np
 import cv2
 
@@ -129,6 +133,19 @@ def main():
         draw_points_on_image(image, cor_2D, half_size=5, output_mode=None)  # output_mode=None为弹窗显示
         # draw_points_on_image(image, cor_2D, half_size=5, output_mode="output_with_points.jpg")
 
+    # ========== 17. 三维点云投影到影像并可视化（新功能） ==========
+    distortion = obj_xml.get_Distortion()
+    dist_coeffs = np.array([
+        distortion.get("K1", 0), distortion.get("K2", 0),
+        distortion.get("P1", 0), distortion.get("P2", 0), distortion.get("K3", 0)
+    ])
+    img_K, img_pose, img_idx = obj_xml.get_cam_parameter_matrix(img_name.split('.')[0])
+    points_3d, points_2d, _ = obj_xml.get_img_to_pointcloud_corresponding_with_color(img_idx)
+    image_proj_path = f"testdata/255/{img_name}"
+    img_proj = cv2.imread(image_proj_path)
+    project_3d_to_2d(points_3d, img_K, img_pose, dist_coeffs=dist_coeffs,
+                      image=img_proj, output_mode=None, half_size=5)
+
 if __name__ == "__main__":
     main()
 ```
@@ -139,24 +156,25 @@ if __name__ == "__main__":
 
 ## API 参考手册
 
-| 方法名                                                      | 功能描述                                           | 参数说明                     | 返回值                                            |
-| -------------------------------------------------------- | ---------------------------------------------- | ------------------------ | ---------------------------------------------- |
-| `ana_photoscan_xml(xml_file)`                            | 读取 XML 文件，创建解析对象                               | `xml_file`: XML文件名       | 类对象                                            |
-| `save_xml_pose(filename=None)`                           | 保存相机位姿 CSV                                     | `filename`: 文件名（可选）      | 无                                              |
-| `get_rays_np_around_five_point(num)`                     | 获取相机5点（四角+中心）向量                                | `num`: 影像编号              | img名, 原点, 方向                                   |
-| `save_five_point_vector(filename=None)`                  | 批量保存所有相机五点向量                                   | `filename`: 文件名（可选）      | 无                                              |
-| `draw_pose_vector(size=0.2)`                             | 绘制所有相机姿态三维箭头图                                  | `size`: 向量缩放因子           | 无                                              |
-| `save_pointcloud_3d(save_path)`                          | 导出三维点云为 SHP 或 MAT                              | `save_path`: 文件名（后缀自动判别） | 无                                              |
-| `get_img_to_pointcloud_corresponding_for_arcgis(num)`    | 导出同名点像素坐标与对应的点云XY坐标生成配准txt文件（用于ArcGIS影像配准到DEM） | `num`: 影像编号              | 无                                              |
-| `get_img_to_pointcloud_corresponding(num)`               | 获取某影像2D像素与3D点的全部配对                             | `num`: 影像编号              | 3D点数组, 2D点数组                                   |
-| `get_img_to_pointcloud_corresponding_with_color(num)`    | 获取某影像2D像素、3D点及颜色(RGB)的全部配对（**新功能**）            | `num`: 影像编号              | 3D点数组, 2D点数组, 颜色数组                             |
-| `get_img_to_pointcloud_corresponding_couple(num1, num2)` | 获取两影像同名点与三维点配对                                 | `num1`, `num2`: 两影像编号    | 2D点1, 2D点2, 3D点数组                              |
-| `get_cam_parameter_matrix(keyword)`                      | 按影像名关键字查找内外参矩阵                                 | `keyword`: 字符串关键字        | 内参, 外参, 编号                                     |
-| `get_Distortion()`                                       | 获取畸变参数                                         | 无                        | 畸变参数字典                                         |
-| `check_cloud_range()`                                    | 查询点云的空间范围（XYZ轴最大最小值）                           | 无                        | min\_x, max\_x, min\_y, max\_y, min\_z, max\_z |
-| `get_elevation(points)`                                  | 点云插值获取指定点高程                                    | points: \[n,2]点坐标        | n个点的高程数组                                       |
-| `point_and_camera_display(num_list, ...)`                | 三维可视化显示指定相机的同名点云、相机位置及视锥体等（**新功能**）            | `num_list`：相机索引列表        | None                                           |
-| `draw_points_on_image(image, points, ...)`               | 在影像上绘制点标记并弹窗/保存/返回（**新功能**，工具函数，类外）            | `image`，`points`，...     | 返回新图（或弹窗/保存）                                   |
+| 方法名                                                                                                               | 功能描述                                           | 参数说明                                                                                                                              | 返回值                                            |
+| ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `ana_photoscan_xml(xml_file)`                                                                                     | 读取 XML 文件，创建解析对象                               | `xml_file`: XML文件名                                                                                                                | 类对象                                            |
+| `save_xml_pose(filename=None)`                                                                                    | 保存相机位姿 CSV                                     | `filename`: 文件名（可选）                                                                                                               | 无                                              |
+| `get_rays_np_around_five_point(num)`                                                                              | 获取相机5点（四角+中心）向量                                | `num`: 影像编号                                                                                                                       | img名, 原点, 方向                                   |
+| `save_five_point_vector(filename=None)`                                                                           | 批量保存所有相机五点向量                                   | `filename`: 文件名（可选）                                                                                                               | 无                                              |
+| `draw_pose_vector(size=0.2)`                                                                                      | 绘制所有相机姿态三维箭头图                                  | `size`: 向量缩放因子                                                                                                                    | 无                                              |
+| `save_pointcloud_3d(save_path)`                                                                                   | 导出三维点云为 SHP 或 MAT                              | `save_path`: 文件名（后缀自动判别）                                                                                                          | 无                                              |
+| `get_img_to_pointcloud_corresponding_for_arcgis(num)`                                                             | 导出同名点像素坐标与对应的点云XY坐标生成配准txt文件（用于ArcGIS影像配准到DEM） | `num`: 影像编号                                                                                                                       | 无                                              |
+| `get_img_to_pointcloud_corresponding(num)`                                                                        | 获取某影像2D像素与3D点的全部配对                             | `num`: 影像编号                                                                                                                       | 3D点数组, 2D点数组                                   |
+| `get_img_to_pointcloud_corresponding_with_color(num)`                                                             | 获取某影像2D像素、3D点及颜色(RGB)的全部配对（**新功能**）            | `num`: 影像编号                                                                                                                       | 3D点数组, 2D点数组, 颜色数组                             |
+| `get_img_to_pointcloud_corresponding_couple(num1, num2)`                                                          | 获取两影像同名点与三维点配对                                 | `num1`, `num2`: 两影像编号                                                                                                             | 2D点1, 2D点2, 3D点数组                              |
+| `get_cam_parameter_matrix(keyword)`                                                                               | 按影像名关键字查找内外参矩阵                                 | `keyword`: 字符串关键字                                                                                                                 | 内参, 外参, 编号                                     |
+| `get_Distortion()`                                                                                                | 获取畸变参数                                         | 无                                                                                                                                 | 畸变参数字典                                         |
+| `check_cloud_range()`                                                                                             | 查询点云的空间范围（XYZ轴最大最小值）                           | 无                                                                                                                                 | min\_x, max\_x, min\_y, max\_y, min\_z, max\_z |
+| `get_elevation(points)`                                                                                           | 点云插值获取指定点高程                                    | points: \[n,2]点坐标                                                                                                                 | n个点的高程数组                                       |
+| `point_and_camera_display(num_list, ...)`                                                                         | 三维可视化显示指定相机的同名点云、相机位置及视锥体等（**新功能**）            | `num_list`：相机索引列表                                                                                                                 | None                                           |
+| `draw_points_on_image(image, points, ...)`                                                                        | 在影像上绘制点标记并弹窗/保存/返回（**新功能**，工具函数，类外）            | `image`，`points`，...                                                                                                              | 返回新图（或弹窗/保存）                                   |
+| `project_3d_to_2d(points_3d, K, Rt, dist_coeffs=None, image=None, output_mode=None, WH=(2048,2048), half_size=5)` | 三维点云投影到影像平面，可视化/返回2D坐标/保存（**新功能**，工具函数，类外）     | `points_3d`：三维点；`K`：内参矩阵；`Rt`：外参矩阵；`dist_coeffs`：畸变参数；`image`：底图（可选）；`output_mode`：None弹窗/1返回2D/str保存；`WH`：输出分辨率；`half_size`：标记大小 | 返回2D像素点或弹窗显示/保存图像                              |
 
 ---
 
@@ -186,6 +204,12 @@ image = cv2.imread("testdata/255/xxx.jpg")  # 替换成实际影像
 if image is not None:
     draw_points_on_image(image, cor_2D, half_size=5, output_mode=None)  # 弹窗
     # draw_points_on_image(image, cor_2D, half_size=5, output_mode="out.jpg")  # 保存
+
+# 三维点云投影到影像平面（新功能示例）
+from PhotoscanXMLAnalyse import project_3d_to_2d
+dist_coeffs = np.array([distortion["K1"], distortion["K2"], distortion["P1"], distortion["P2"], distortion["K3"]])
+img_proj = cv2.imread("testdata/255/xxx.jpg")  # 替换实际影像
+project_3d_to_2d(cor_3D, img_K, img_pose, dist_coeffs=dist_coeffs, image=img_proj, output_mode=None, half_size=5)
 ```
 
 ---
@@ -224,3 +248,4 @@ if image is not None:
 **欢迎 Star、Fork 与使用本项目！如有问题或建议，欢迎通过 GitHub Issue 或邮件联系作者或维护者。**
 
 ---
+
