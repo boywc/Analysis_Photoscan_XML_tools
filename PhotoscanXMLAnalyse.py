@@ -69,7 +69,7 @@ def draw_points_on_image(image, points, half_size=5, output_mode=None, resize_sh
         print(f"Save Success {output_mode}")
 
 
-def project_3d_to_2d(points_3d, K, Rt, dist_coeffs=None, image=None, output_mode=None, WH=(2048, 2048), half_size=5):
+def project_3d_to_2d_display(points_3d, K, Rt, dist_coeffs=None, image=None, output_mode=None, WH=(2048, 2048), half_size=5):
     R = Rt[:3, :3]
     t = np.expand_dims(Rt[:3, 3], axis=-1)
     t = np.array([t[1], t[2], t[0]])

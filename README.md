@@ -48,7 +48,7 @@
 * **支持提取三维点云与影像同名点的RGB颜色信息，实现彩色点云重建**
 * **三维可视化显示指定相机点云与姿态（`point_and_camera_display`，新功能）**
 * **在原始影像上高亮/保存同名点标记（`draw_points_on_image`，新功能）**
-* **三维点云投影到影像并可视化（`project_3d_to_2d`，新功能）**
+* **三维点云投影到影像并可视化（`project_3d_to_2d_display`，新功能）**
 
   * 任意三维点云可通过相机内外参和畸变参数准确投影至影像平面，实现成果可视化/误差分析/结构校验等场景
 * 兼容外部工具（如 OpenCV PNP、ArcGIS DEM）
@@ -105,12 +105,12 @@ pip install -e .
 * 关键参数查找与可视化
 * 查询三维点云空间范围（XYZ轴最大最小值）
 * 点云高程插值（如任意平面点获取地形高程）
-* **三维点云投影到影像并可视化（`project_3d_to_2d`，新功能）**
+* **三维点云投影到影像并可视化（`project_3d_to_2d_display`，新功能）**
 
 #### 推荐调用流程如下：
 
 ```python
-from PhotoscanXMLAnalyse import ana_photoscan_xml, draw_points_on_image, project_3d_to_2d
+from PhotoscanXMLAnalyse import ana_photoscan_xml, draw_points_on_image, project_3d_to_2d_display
 import numpy as np
 import cv2
 
@@ -143,7 +143,7 @@ def main():
     points_3d, points_2d, _ = obj_xml.get_img_to_pointcloud_corresponding_with_color(img_idx)
     image_proj_path = f"testdata/255/{img_name}"
     img_proj = cv2.imread(image_proj_path)
-    project_3d_to_2d(points_3d, img_K, img_pose, dist_coeffs=dist_coeffs,
+    project_3d_to_2d_display(points_3d, img_K, img_pose, dist_coeffs=dist_coeffs,
                       image=img_proj, output_mode=None, half_size=5)
 
 if __name__ == "__main__":
@@ -174,7 +174,7 @@ if __name__ == "__main__":
 | `get_elevation(points)`                                                                                           | 点云插值获取指定点高程                                    | points: \[n,2]点坐标                                                                                                                 | n个点的高程数组                                       |
 | `point_and_camera_display(num_list, ...)`                                                                         | 三维可视化显示指定相机的同名点云、相机位置及视锥体等（**新功能**）            | `num_list`：相机索引列表                                                                                                                 | None                                           |
 | `draw_points_on_image(image, points, ...)`                                                                        | 在影像上绘制点标记并弹窗/保存/返回（**新功能**，工具函数，类外）            | `image`，`points`，...                                                                                                              | 返回新图（或弹窗/保存）                                   |
-| `project_3d_to_2d(points_3d, K, Rt, dist_coeffs=None, image=None, output_mode=None, WH=(2048,2048), half_size=5)` | 三维点云投影到影像平面，可视化/返回2D坐标/保存（**新功能**，工具函数，类外）     | `points_3d`：三维点；`K`：内参矩阵；`Rt`：外参矩阵；`dist_coeffs`：畸变参数；`image`：底图（可选）；`output_mode`：None弹窗/1返回2D/str保存；`WH`：输出分辨率；`half_size`：标记大小 | 返回2D像素点或弹窗显示/保存图像                              |
+| `project_3d_to_2d_display(points_3d, K, Rt, dist_coeffs=None, image=None, output_mode=None, WH=(2048,2048), half_size=5)` | 三维点云投影到影像平面，可视化/返回2D坐标/保存（**新功能**，工具函数，类外）     | `points_3d`：三维点；`K`：内参矩阵；`Rt`：外参矩阵；`dist_coeffs`：畸变参数；`image`：底图（可选）；`output_mode`：None弹窗/1返回2D/str保存；`WH`：输出分辨率；`half_size`：标记大小 | 返回2D像素点或弹窗显示/保存图像                              |
 
 ---
 
@@ -206,10 +206,10 @@ if image is not None:
     # draw_points_on_image(image, cor_2D, half_size=5, output_mode="out.jpg")  # 保存
 
 # 三维点云投影到影像平面（新功能示例）
-from PhotoscanXMLAnalyse import project_3d_to_2d
+from PhotoscanXMLAnalyse import project_3d_to_2d_display
 dist_coeffs = np.array([distortion["K1"], distortion["K2"], distortion["P1"], distortion["P2"], distortion["K3"]])
 img_proj = cv2.imread("testdata/255/xxx.jpg")  # 替换实际影像
-project_3d_to_2d(cor_3D, img_K, img_pose, dist_coeffs=dist_coeffs, image=img_proj, output_mode=None, half_size=5)
+project_3d_to_2d_display(cor_3D, img_K, img_pose, dist_coeffs=dist_coeffs, image=img_proj, output_mode=None, half_size=5)
 ```
 
 ---

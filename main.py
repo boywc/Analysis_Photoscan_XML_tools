@@ -20,7 +20,7 @@ Photoscan 空中三角测量 XML 工具库的主要功能演示 Demo
 确保 testdata/255.xml 文件已存在。
 """
 
-from PhotoscanXMLAnalyse import ana_photoscan_xml, draw_points_on_image, project_3d_to_2d
+from PhotoscanXMLAnalyse import ana_photoscan_xml, draw_points_on_image, project_3d_to_2d_display
 import numpy as np
 import cv2
 
@@ -130,7 +130,7 @@ def main():
     points_3d, points_2d, _ = obj_xml.get_img_to_pointcloud_corresponding_with_color(img_idx)
     image_proj_path = f"testdata/255/{img_name}"
     img_proj = cv2.imread(image_proj_path)
-    project_3d_to_2d(points_3d, img_K, img_pose, dist_coeffs=dist_coeffs,
+    project_3d_to_2d_display(points_3d, img_K, img_pose, dist_coeffs=dist_coeffs,
                       half_size=5)
 
 if __name__ == "__main__":
