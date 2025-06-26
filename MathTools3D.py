@@ -1,7 +1,17 @@
 import numpy as np
 from PhotoscanXMLAnalyse import *
+import cv2
 
 def xmlpos_to_mathpos(pos):
+    """
+    将 Photoscan XML 外参格式矩阵转换为数学常用坐标系下的外参格式。
+
+    Args:
+        pos (ndarray): 原始外参矩阵，shape=[3,4]。
+
+    Returns:
+        ndarray: 转换后外参矩阵，shape=[3,4]。
+    """
     return_board = np.zeros_like(pos)
     return_board[:, :3] = pos[:, :3]
     x = pos[0, 3]
@@ -13,7 +23,18 @@ def xmlpos_to_mathpos(pos):
     return return_board
 
 def camera_calibration(cor_3D_A, cor_2D_A, ror3_zf=[1, 1]):
+    """
+    基于 2D-3D 同名点对，利用 DLT 算法估算相机内外参数。
 
+    Args:
+        cor_3D_A (ndarray): 三维点坐标，shape=[N,3]。
+        cor_2D_A (ndarray): 二维像素坐标，shape=[N,2]。
+        ror3_zf (list): [ro_zf, r3_zf]，方向选择因子，用于纠正可能的方向歧义。
+
+    Returns:
+        K (ndarray): 相机内参矩阵，shape=[3,3]。
+        pose (ndarray): 外参（旋转+平移），shape=[3,4]。
+    """
     ro_zf, r3_zf = ror3_zf
 
     pad_1 = np.ones([len(cor_3D_A), 1], dtype=np.float32)
@@ -25,6 +46,7 @@ def camera_calibration(cor_3D_A, cor_2D_A, ror3_zf=[1, 1]):
     line_1_2 = np.hstack((line_1, line_2))
     line_1_2 = np.reshape(line_1_2, (len(cor_3D_A) * 2, 8))
 
+    # 构造 DLT 方程右侧项
     line_1b = -1 * cor_2D_A[:, 0]
     line_1b = np.expand_dims(line_1b, axis=-1)
     line_1b = line_1b * cor_3D_A
@@ -34,12 +56,14 @@ def camera_calibration(cor_3D_A, cor_2D_A, ror3_zf=[1, 1]):
     line_1_2b = np.hstack((line_1b, line_2b))
     line_1_2b = np.reshape(line_1_2b, (len(cor_3D_A) * 2, 4))
 
+    # 拼接最终的 DLT 矩阵
     P = np.hstack((line_1_2, line_1_2b))
     U, Sigma, VT = np.linalg.svd(P)
     V = VT.T
     m = V[:, -1]
     M = np.reshape(m, (3, 4))
 
+    # 分解获得内外参
     A = M[:3, :3]
     b = M[:3, 3]
     ro = ro_zf / np.linalg.norm(A[2, :])
@@ -68,6 +92,18 @@ def camera_calibration(cor_3D_A, cor_2D_A, ror3_zf=[1, 1]):
     return K, pose
 
 def camera_calibration_with_verify(cor_3D_A_train, cor_2D_A_train):
+    """
+    对同名点进行多方向穷举，自动选取投影重投影误差最小的相机内外参。
+
+    Args:
+        cor_3D_A_train (ndarray): 三维点，shape=[N,3]。
+        cor_2D_A_train (ndarray): 二维点，shape=[N,2]。
+
+    Returns:
+        min_loss (float): 最小重投影误差。
+        min_k (ndarray): 最优内参矩阵。
+        min_p (ndarray): 最优外参（旋转+平移）。
+    """
     loss_list = []
     K_list = []
     P_list = []
@@ -86,17 +122,39 @@ def camera_calibration_with_verify(cor_3D_A_train, cor_2D_A_train):
     return min_loss, min_k, min_p
 
 def point_3D_projection_to_camera(K, pose, p2d):
+    """
+    给定内外参，将三维点投影到二维像素坐标（不含畸变）。
 
-   pad_1_test = np.ones([len(p2d), 1], dtype=np.float32)
-   cor_3D_A_test = np.hstack((p2d, pad_1_test)).T
-   M = np.dot(K, pose)
-   targ = np.dot(M, cor_3D_A_test)
-   u = targ[0, :] / targ[2, :]
-   v = targ[1, :] / targ[2, :]
-   yc = np.array([u, v]).T
-   return yc
+    Args:
+        K (ndarray): 相机内参矩阵，shape=[3,3]。
+        pose (ndarray): 相机外参，shape=[3,4]。
+        p2d (ndarray): 三维点，shape=[N,3]。
+
+    Returns:
+        yc (ndarray): 投影后的二维点，shape=[N,2]。
+    """
+    pad_1_test = np.ones([len(p2d), 1], dtype=np.float32)
+    cor_3D_A_test = np.hstack((p2d, pad_1_test)).T
+    M = np.dot(K, pose)
+    targ = np.dot(M, cor_3D_A_test)
+    u = targ[0, :] / targ[2, :]
+    v = targ[1, :] / targ[2, :]
+    yc = np.array([u, v]).T
+    return yc
 
 def opencv_PNP(point3D, point_img, K, distortion=None):
+    """
+    调用 OpenCV 的 PnP 算法进行相机位姿估计（单张影像多点）。
+
+    Args:
+        point3D (ndarray): 三维点云，shape=[N,3]。
+        point_img (ndarray): 对应二维像素点，shape=[N,2]。
+        K (ndarray): 内参矩阵。
+        distortion (ndarray or None): 畸变参数，默认为None。
+
+    Returns:
+        ndarray: 外参矩阵，shape=[3,4]。
+    """
     ptin_img = np.array([(inf[0], inf[1]) for inf in point_img], dtype=np.float32)
     pt3D = np.array([(inf[0], inf[1], inf[2]) for inf in point3D], dtype=np.float32)
     retval, rvec, tvec = cv2.solvePnP(pt3D, ptin_img, K, distortion)
@@ -104,6 +162,18 @@ def opencv_PNP(point3D, point_img, K, distortion=None):
     return np.hstack((M_R, tvec))
 
 def opencv_3D_projection_to_img(obj_points, K, pose, dist= np.zeros((1, 4), dtype=np.float32)):
+    """
+    使用 OpenCV projectPoints 工具，将三维点按内外参投影到二维像素坐标。
+
+    Args:
+        obj_points (ndarray): 三维点集，shape=[N,3]。
+        K (ndarray): 相机内参矩阵。
+        pose (ndarray): 外参（旋转+平移），shape=[3,4]。
+        dist (ndarray): 畸变参数，默认全零。
+
+    Returns:
+        img_points (ndarray): 投影后的二维像素点，shape=[N,2]。
+    """
     rvecs_in = pose[:, :3]
     tvecs_in = pose[:, 3]
     tvecs_in = np.expand_dims(tvecs_in, axis=-1)
@@ -111,62 +181,3 @@ def opencv_3D_projection_to_img(obj_points, K, pose, dist= np.zeros((1, 4), dtyp
     img_points = np.array(img_points)
     img_points = np.squeeze(img_points)
     return img_points
-
-
-######一：：：：：功能1，摄象机标定，计算位姿############
-### 重新计算位姿矩阵，由于photoscan获得的位姿矩阵可能存在一定误差，这里提供了重新计算位姿矩阵的方法
-obj_xml = ana_photoscan_xml("testdata/255.xml")
-img_A_K, img_A_pose, num_A = obj_xml.get_cam_parameter_matrix("20220130181054")
-points_3d, point_2d, point_color = obj_xml.get_img_to_pointcloud_corresponding_with_color(num_A)
-
-####################################################
-### 第一种方法，根据公式自行编写代码计算
-# 输入三维点云和对应的二维点，计算位姿矩阵
-# 这里的ror3_zf是计算参数有四种选项[1, 1]  [1, -1], [-1 ,1], [-1,-1]
-# 对方程求解时会出现四个解，正确的解在这是其中之一，通过调整ror3_zf确定正确的解
-# 通常[1, 1]就说正确的解，如果不对，再换其他的选项，试出正确的解
-K, pose = camera_calibration(points_3d, point_2d, ror3_zf=[1, 1])
-# 因此我们包装了一个函数，试了四种所有可能，重投计算最小误差自动分辨是哪个情况
-min_loss, min_k, min_p = camera_calibration_with_verify(points_3d, point_2d)
-print("Photoscan XML K: \n", img_A_K)
-print("Photoscan XML pose: \n", img_A_pose)
-print("Calculated K: \n", K)
-print("Calculated pose: \n", pose)
-print("Calculated_test K: \n", min_k)
-print("Calculated_test pose: \n", min_p)
-# 从计算结果可以看出，photoscan输出的pos矩阵和自己计算的矩阵存在一定差距
-# 最后一列代表位置坐标的排列是不同的，的XML文件是x,y,z.自己计算的是y,z,x
-# 这里提供了XMLpos和自己生成pos的格式转换方式  xmlpos_to_mathpos(pos)
-
-####################################################
-### 第二种方法，根据OpenCV PNP算法求解，需要输入摄象机内参，畸变（可选）。计算出外姿
-# 案例1 不带畸变
-pos_pnp = opencv_PNP(points_3d, point_2d, img_A_K, distortion=None)
-print("Calculated pose by opencv: \n", pos_pnp)
-# 案例2 不带畸变
-distor = obj_xml.get_Distortion()
-dist_coeffs = np.array([distor["K1"], distor["K2"], distor["P1"], distor["P2"], distor["K3"]])
-pos_pnp = opencv_PNP(points_3d, point_2d, img_A_K, distortion=dist_coeffs)
-print("Calculated pose by opencv with distortion: \n", pos_pnp)
-
-######一：：：：：功能2，重投影############
-# 将3D点投影回影像，有两个方法，
-# 方法一：第一个是使用自己编写的方法
-porject_2d = point_3D_projection_to_camera(K, pose, points_3d)
-loss = np.mean(np.abs(porject_2d - point_2d))
-print("Re Project loss:  ", loss)
-
-# 方法二：使用opencv 自带的
-# 案例1 带畸变
-porject_2d = opencv_3D_projection_to_img(points_3d, K, pose, dist=dist_coeffs)
-# 案例2 不带畸变
-porject_2d = opencv_3D_projection_to_img(points_3d, K, pose)
-loss = np.mean(np.abs(porject_2d - point_2d))
-print("Re Project loss from opencv:  ", loss)
-
-# 注意，重投影的时候使用的都是本系统生成的pos位姿矩阵，如果使用XML位姿矩阵需要先转换一下
-# 案例3 使用XML文件的位姿矩阵
-mathpos = xmlpos_to_mathpos(img_A_pose)
-porject_2d = opencv_3D_projection_to_img(points_3d, img_A_K, mathpos)
-loss = np.mean(np.abs(porject_2d - point_2d))
-print("Re Project loss from xml pos:  ", loss)
