@@ -1,6 +1,8 @@
 import numpy as np
+from scipy.interpolate import griddata
 from PhotoscanXMLAnalyse import *
 import cv2
+import matplotlib.pyplot as plt
 
 def xmlpos_to_mathpos(pos):
     """
@@ -161,7 +163,7 @@ def opencv_PNP(point3D, point_img, K, distortion=None):
     M_R = cv2.Rodrigues(rvec)[0]
     return np.hstack((M_R, tvec))
 
-def opencv_3D_projection_to_img(obj_points, K, pose, dist= np.zeros((1, 4), dtype=np.float32)):
+def opencv_3D_projection_to_img(obj_points, K, pose, dist=np.zeros((1, 4), dtype=np.float32)):
     """
     使用 OpenCV projectPoints 工具，将三维点按内外参投影到二维像素坐标。
 
@@ -181,52 +183,99 @@ def opencv_3D_projection_to_img(obj_points, K, pose, dist= np.zeros((1, 4), dtyp
     img_points = np.array(img_points)
     img_points = np.squeeze(img_points)
     return img_points
+
 def interpolation_dense_3D(img_A, point_2d, points_3d, show=0):
+    """
+    基于稀疏2D-3D同名点对，利用插值实现整幅影像每个像素的三维重建（稠密点云）。
+
+    对输入照片每个像素，通过插值方法映射到三维空间，生成稠密彩色点云。
+    可用于点云可视化、深度估计、三维模型重建等场景。
+
+    Args:
+        img_A (ndarray): 输入RGB影像，shape=[H,W,3]。
+        point_2d (ndarray): 已知2D像素坐标，shape=[N,2]。
+        points_3d (ndarray): 对应3D空间点，shape=[N,3]。
+        show (int, optional): 是否显示稠密三维有效掩码（1为显示）。
+
+    Returns:
+        point_3d_dense (ndarray): 稠密三维点云，shape=[M,3]，M为有效像素点数。
+        color (ndarray): 每个点的颜色（RGB），shape=[M,3]。
+        mask_bool (ndarray): 原图空间掩码，True/False表示该像素是否有有效3D映射，shape=[H,W]。
+    """
+    # 构造影像所有像素的坐标网格（按行展平）
     w_list = np.arange(0, img_A.shape[1])
     h_list = np.arange(0, img_A.shape[0])
     w_mesh, h_mesh = np.meshgrid(w_list, h_list)
     w_mesh = np.reshape(w_mesh, -1)
     h_mesh = np.reshape(h_mesh, -1)
     mesh = np.array([w_mesh, h_mesh]).T
+
+    # 分别对XYZ分量插值，得到所有像素的空间坐标（可能有无效值）
     sampling_x = griddata(point_2d, points_3d[:, 0], mesh, method='linear')
     sampling_y = griddata(point_2d, points_3d[:, 1], mesh, method='linear')
     sampling_z = griddata(point_2d, points_3d[:, 2], mesh, method='linear')
     point_3d_dense = np.array([sampling_x, sampling_y, sampling_z]).T
+
+    # 原图像素RGB颜色展平
     color = np.reshape(img_A, (-1, 3))
 
+    # 筛选所有插值为非NaN的像素（三分量全有效）
     x = point_3d_dense[:, 0]
     y = point_3d_dense[:, 1]
     z = point_3d_dense[:, 2]
     x_bool = ~np.isnan(x)
     y_bool = ~np.isnan(y)
     z_bool = ~np.isnan(z)
-
     all_bool = x_bool * y_bool * z_bool
+
+    # 生成有效掩码，并reshape为原图尺寸
     mask_bool = all_bool
     mask_bool = np.reshape(mask_bool, (img_A.shape[0], img_A.shape[1]))
+
+    # 只保留有效像素点的三维坐标与颜色
     point_3d_dense = point_3d_dense[all_bool]
     color = color[all_bool]
+
+    # 可视化有效像素掩码（可选）
     if show:
         mask_bool_rt = np.zeros_like(mask_bool, dtype=np.uint8)
         mask_bool_rt[mask_bool] = 255
         mask_bool_rt = cv2.resize(mask_bool_rt, (400, 400))
-        cv2.imshow('Image with Points', mask_bool_rt)
+        cv2.imshow('Dense 3D Mapping Mask', mask_bool_rt)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
-    # 返回稠密三维点云、颜色、以及照片中有映射像素和无映射像素的掩码
+    # 返回稠密点云、颜色和有效掩码
     return point_3d_dense, color, mask_bool
 
-
-# 计算深度图
 def depth_map(point_3d_dense, mask_bool, pos, show=0):
+    """
+    根据参考点（如相机中心）计算稠密点云的深度图。
+
+    对每个有效三维点，计算其到指定点（通常为相机中心）的欧氏距离，并生成深度影像。
+    可用于深度学习、稠密建模等。
+
+    Args:
+        point_3d_dense (ndarray): 稠密三维点云，shape=[M,3]。
+        mask_bool (ndarray): 有效像素掩码，shape=[H,W]。
+        pos (ndarray): 相机中心或参考点坐标，shape=[3,]。
+        show (int, optional): 是否可视化深度图（1为显示）。
+
+    Returns:
+        mask_bool_rt (ndarray): 全图深度矩阵，shape=[H,W]，无效像素为0。
+    """
+    # pos shape: [3,]，扩展成[1,3]便于广播
     pos = np.expand_dims(pos, axis=0)
+    # 计算所有有效点到观测点的欧氏距离
     depth = (point_3d_dense - pos) ** 2
     depth = np.sqrt(np.sum(depth, axis=1))
+    # 映射回原图空间，非有效像素深度为0
     mask_bool_rt = np.zeros_like(mask_bool, dtype=np.float32)
     mask_bool_rt[mask_bool] = depth
+    # 可视化深度图（可选）
     if show:
         im = plt.imshow(mask_bool_rt)
         cbar = plt.colorbar(im)
         cbar.set_label('Depth (m)')
         plt.show()
+    # 返回深度图
     return mask_bool_rt
