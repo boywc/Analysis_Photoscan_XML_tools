@@ -181,3 +181,52 @@ def opencv_3D_projection_to_img(obj_points, K, pose, dist= np.zeros((1, 4), dtyp
     img_points = np.array(img_points)
     img_points = np.squeeze(img_points)
     return img_points
+def interpolation_dense_3D(img_A, point_2d, points_3d, show=0):
+    w_list = np.arange(0, img_A.shape[1])
+    h_list = np.arange(0, img_A.shape[0])
+    w_mesh, h_mesh = np.meshgrid(w_list, h_list)
+    w_mesh = np.reshape(w_mesh, -1)
+    h_mesh = np.reshape(h_mesh, -1)
+    mesh = np.array([w_mesh, h_mesh]).T
+    sampling_x = griddata(point_2d, points_3d[:, 0], mesh, method='linear')
+    sampling_y = griddata(point_2d, points_3d[:, 1], mesh, method='linear')
+    sampling_z = griddata(point_2d, points_3d[:, 2], mesh, method='linear')
+    point_3d_dense = np.array([sampling_x, sampling_y, sampling_z]).T
+    color = np.reshape(img_A, (-1, 3))
+
+    x = point_3d_dense[:, 0]
+    y = point_3d_dense[:, 1]
+    z = point_3d_dense[:, 2]
+    x_bool = ~np.isnan(x)
+    y_bool = ~np.isnan(y)
+    z_bool = ~np.isnan(z)
+
+    all_bool = x_bool * y_bool * z_bool
+    mask_bool = all_bool
+    mask_bool = np.reshape(mask_bool, (img_A.shape[0], img_A.shape[1]))
+    point_3d_dense = point_3d_dense[all_bool]
+    color = color[all_bool]
+    if show:
+        mask_bool_rt = np.zeros_like(mask_bool, dtype=np.uint8)
+        mask_bool_rt[mask_bool] = 255
+        mask_bool_rt = cv2.resize(mask_bool_rt, (400, 400))
+        cv2.imshow('Image with Points', mask_bool_rt)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+    # 返回稠密三维点云、颜色、以及照片中有映射像素和无映射像素的掩码
+    return point_3d_dense, color, mask_bool
+
+
+# 计算深度图
+def depth_map(point_3d_dense, mask_bool, pos, show=0):
+    pos = np.expand_dims(pos, axis=0)
+    depth = (point_3d_dense - pos) ** 2
+    depth = np.sqrt(np.sum(depth, axis=1))
+    mask_bool_rt = np.zeros_like(mask_bool, dtype=np.float32)
+    mask_bool_rt[mask_bool] = depth
+    if show:
+        im = plt.imshow(mask_bool_rt)
+        cbar = plt.colorbar(im)
+        cbar.set_label('Depth (m)')
+        plt.show()
+    return mask_bool_rt
