@@ -55,6 +55,7 @@
   * 任意三维点云可通过相机内外参和畸变参数准确投影至影像平面，实现成果可视化/误差分析/结构校验等场景
 * 兼容外部工具（如 OpenCV PNP、ArcGIS DEM）
 * **\[新] MathTools3D.py 提供三维摄影测量核心数学函数（自定义/OPENCV解算、重投影、位姿转换等）**
+* **\[新] MathTools3D.py 支持基于2D-3D同名点的稠密三维插值重建与深度图生成**
 
 ---
 
@@ -153,7 +154,7 @@ if __name__ == "__main__":
 
 ### 2. MathTools3D 典型工作流
 
-> 用于三维摄影测量的数学基础函数（重投影、标定、多方法对比）
+> 用于三维摄影测量的数学基础函数（重投影、标定、多方法对比、稠密三维插值与深度图）
 
 ```python
 from MathTools3D import *
@@ -182,10 +183,18 @@ pos_pnp_dist = opencv_PNP(points_3d, point_2d, img_A_K, distortion=dist_coeffs)
 project_2d = point_3D_projection_to_camera(K, pose, points_3d)
 loss = np.mean(np.abs(project_2d - point_2d))
 project_2d_cv = opencv_3D_projection_to_img(points_3d, K, pose, dist=dist_coeffs)
-loss_cv = np.mean(np.abs(project_2d_cv - point_2d))
+loss_cv = np.mean(np.abs(project_2d_cv - point_2d)
 
 # 4. 外参格式互转（XML输出与数学解互通）
 mathpos = xmlpos_to_mathpos(img_A_pose)
+
+# 5. 稠密三维插值与深度图（新功能）
+img_name = obj_xml.camera_pose[num_A][0]
+img_path = f"testdata/255/{img_name}"
+img_A = cv2.imread(img_path)
+point_3d_dense, color_dense, mask_bool = interpolation_dense_3D(img_A, point_2d, points_3d, show=1)
+cam_center = xmlpos_to_mathpos(img_A_pose)[:,3]
+depth_img = depth_map(point_3d_dense, mask_bool, cam_center, show=1)
 ```
 
 ---
@@ -204,7 +213,7 @@ mathpos = xmlpos_to_mathpos(img_A_pose)
 | `save_pointcloud_3d(save_path)`                                                                                           | 导出三维点云为 SHP 或 MAT                              | `save_path`: 文件名（后缀自动判别）                                                                                                          | 无                                              |
 | `get_img_to_pointcloud_corresponding_for_arcgis(num)`                                                                     | 导出同名点像素坐标与对应的点云XY坐标生成配准txt文件（用于ArcGIS影像配准到DEM） | `num`: 影像编号                                                                                                                       | 无                                              |
 | `get_img_to_pointcloud_corresponding(num)`                                                                                | 获取某影像2D像素与3D点的全部配对                             | `num`: 影像编号                                                                                                                       | 3D点数组, 2D点数组                                   |
-| `get_img_to_pointcloud_corresponding_with_color(num)`                                                                     | 获取某影像2D像素、3D点及颜色(RGB)的全部配对（**新功能**）            | `num`: 影像编号                                                                                                                       | 3D点数组, 2D点数组, 颜色数组                             |
+| `get_img_to_pointcloud_corresponding_with_color(num)`                                                                     | 获取某影像2D像素、3D点及颜色(RGB)配对（**新功能**）               | `num`: 影像编号                                                                                                                       | 3D点数组, 2D点数组, 颜色数组                             |
 | `get_img_to_pointcloud_corresponding_couple(num1, num2)`                                                                  | 获取两影像同名点与三维点配对                                 | `num1`, `num2`: 两影像编号                                                                                                             | 2D点1, 2D点2, 3D点数组                              |
 | `get_cam_parameter_matrix(keyword)`                                                                                       | 按影像名关键字查找内外参矩阵                                 | `keyword`: 字符串关键字                                                                                                                 | 内参, 外参, 编号                                     |
 | `get_Distortion()`                                                                                                        | 获取畸变参数                                         | 无                                                                                                                                 | 畸变参数字典                                         |
@@ -218,14 +227,19 @@ mathpos = xmlpos_to_mathpos(img_A_pose)
 
 ### 2. MathTools3D.py API 参考手册
 
-| 方法名                                                      | 功能描述               | 参数说明                       | 返回值                            |
-| -------------------------------------------------------- | ------------------ | -------------------------- | ------------------------------ |
-| `camera_calibration(pts3d, pts2d, ror3_zf=[1,1])`        | 标定解算相机内外参（四解之一）    | 三维点，二维点，ror3\_zf参数（四种组合之一） | K, pose                        |
-| `camera_calibration_with_verify(pts3d, pts2d)`           | 自动遍历四解，返回重投影误差最小的解 | 三维点，二维点                    | min\_loss, best\_K, best\_pose |
-| `point_3D_projection_to_camera(K, pose, pts3d)`          | 用指定内外参将3D点投影回2D点   | K，外参，三维点                   | 投影后2D点                         |
-| `opencv_PNP(pts3d, pts2d, K, distortion=None)`           | 调用OpenCV的PNP算法计算外参 | 3D点、2D点、内参K、畸变参数可选         | pose(3x4)                      |
-| `opencv_3D_projection_to_img(pts3d, K, pose, dist=None)` | OpenCV方式3D->2D投影   | 3D点、K、外参、畸变                | 2D点                            |
-| `xmlpos_to_mathpos(pos)`                                 | XML外参格式与数学解外参互转    | pos矩阵（3x4）                 | 转换后的pos                        |
+| 方法名                                                          | 功能描述                        | 参数说明                                                                                | 返回值                             |
+| ------------------------------------------------------------ | --------------------------- | ----------------------------------------------------------------------------------- | ------------------------------- |
+| `camera_calibration(pts3d, pts2d, ror3_zf=[1,1])`            | 标定解算相机内外参（四解之一）             | 三维点，二维点，ror3\_zf参数（四种组合之一）                                                          | K, pose                         |
+| `camera_calibration_with_verify(pts3d, pts2d)`               | 自动遍历四解，返回重投影误差最小的解          | 三维点，二维点                                                                             | min\_loss, best\_K, best\_pose  |
+| `point_3D_projection_to_camera(K, pose, pts3d)`              | 用指定内外参将3D点投影回2D点            | K，外参，三维点                                                                            | 投影后2D点                          |
+| `opencv_PNP(pts3d, pts2d, K, distortion=None)`               | 调用OpenCV的PNP算法计算外参          | 3D点、2D点、内参K、畸变参数可选                                                                  | pose(3x4)                       |
+| `opencv_3D_projection_to_img(pts3d, K, pose, dist=None)`     | OpenCV方式3D->2D投影            | 3D点、K、外参、畸变                                                                         | 2D点                             |
+| `xmlpos_to_mathpos(pos)`                                     | XML外参格式与数学解外参互转             | pos矩阵（3x4）                                                                          | 转换后的pos                         |
+| `interpolation_dense_3D(img_A, point_2d, points_3d, show=0)` | 基于2D-3D同名点的影像稠密三维插值（生成稠密点云） | img\_A: 输入影像\[H,W,3]; point\_2d: 已知2D点\[N,2]; points\_3d: 对应3D点\[N,3]; show: 是否显示掩码 | 稠密3D点\[M,3], 颜色\[M,3], 掩码\[H,W] |
+| `depth_map(point_3d_dense, mask_bool, pos, show=0)`          | 基于稠密点                       |                                                                                     |                                 |
+
+
+云生成深度图               | point\_3d\_dense: 稠密3D点\[M,3]; mask\_bool: 掩码\[H,W]; pos: 相机或参考点\[3,]; show: 是否显示深度图            | 深度图\[H,W]                         |
 
 ---
 
@@ -264,9 +278,6 @@ mathpos = xmlpos_to_mathpos(img_A_pose)
 
 ---
 
-\*\*欢迎 Star、Fork 与使用本项目！如有问题或建议，
-
-
-欢迎通过 GitHub Issue 或邮件联系作者或维护者。\*\*
+**欢迎 Star、Fork 与使用本项目！如有问题或建议，欢迎通过 GitHub Issue 或邮件联系作者或维护者。**
 
 ---
