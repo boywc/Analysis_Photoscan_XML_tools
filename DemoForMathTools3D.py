@@ -11,6 +11,7 @@ DemoForMathTools3D.py
 - 3D点重投影到影像平面（支持自定义和OpenCV方法）
 - XML与数学推导位姿格式互转
 - 重投影误差对比与输出
+- 稠密三维重建与深度图生成（新功能）
 
 本Demo假定 testdata/255.xml、影像及点云配准信息已准备好。
 
@@ -81,6 +82,27 @@ mathpos = xmlpos_to_mathpos(img_A_pose)
 project_2d_xml = opencv_3D_projection_to_img(points_3d, img_A_K, mathpos)
 loss_xml = np.mean(np.abs(project_2d_xml - point_2d))
 print("Reproject loss from XML pos: ", loss_xml)
+
+# ========== 4. 稠密三维重建与深度图生成（新功能） ==========
+
+# 读取当前相机原始影像（假定 XML 影像名可直接拼路径）
+img_name = obj_xml.camera_pose[num_A][0]
+img_path = f"testdata/255/{img_name}"
+img_A = cv2.imread(img_path)
+if img_A is None:
+    raise FileNotFoundError(f"未找到原始影像文件: {img_path}")
+
+# --- 4.1 稠密三维点云插值映射 ---
+point_3d_dense, color_dense, mask_bool = interpolation_dense_3D(img_A, point_2d, points_3d, show=1)
+print(f"Dense 3D points count: {point_3d_dense.shape[0]}")
+print(f"Valid mask shape: {mask_bool.shape}, color array shape: {color_dense.shape}")
+
+# --- 4.2 深度图生成 ---
+# 相机中心获取，格式转换（外参矩阵最后一列顺序 x, y, z）
+pose_math = xmlpos_to_mathpos(img_A_pose)
+cam_center = pose_math[:, 3]
+depth_img = depth_map(point_3d_dense, mask_bool, cam_center, show=1)
+print(f"Depth map shape: {depth_img.shape}, depth min: {np.min(depth_img):.3f}, max: {np.max(depth_img):.3f}")
 
 # ========== 结论/提示 ==========
 
