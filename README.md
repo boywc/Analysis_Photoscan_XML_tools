@@ -236,10 +236,7 @@ depth_img = depth_map(point_3d_dense, mask_bool, cam_center, show=1)
 | `opencv_3D_projection_to_img(pts3d, K, pose, dist=None)`     | OpenCV方式3D->2D投影            | 3D点、K、外参、畸变                                                                         | 2D点                             |
 | `xmlpos_to_mathpos(pos)`                                     | XML外参格式与数学解外参互转             | pos矩阵（3x4）                                                                          | 转换后的pos                         |
 | `interpolation_dense_3D(img_A, point_2d, points_3d, show=0)` | 基于2D-3D同名点的影像稠密三维插值（生成稠密点云） | img\_A: 输入影像\[H,W,3]; point\_2d: 已知2D点\[N,2]; points\_3d: 对应3D点\[N,3]; show: 是否显示掩码 | 稠密3D点\[M,3], 颜色\[M,3], 掩码\[H,W] |
-| `depth_map(point_3d_dense, mask_bool, pos, show=0)`          | 基于稠密点                       |                                                                                     |                                 |
-
-
-云生成深度图               | point\_3d\_dense: 稠密3D点\[M,3]; mask\_bool: 掩码\[H,W]; pos: 相机或参考点\[3,]; show: 是否显示深度图            | 深度图\[H,W]                         |
+| `depth_map(point_3d_dense, mask_bool, pos, show=0)`          | 基于稠密点生成深度图               | point\_3d\_dense: 稠密3D点\[M,3]; mask\_bool: 掩码\[H,W]; pos: 相机或参考点\[3,]; show: 是否显示深度图            | 深度图\[H,W]                         |
 
 ---
 
